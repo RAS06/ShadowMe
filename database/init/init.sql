@@ -1,0 +1,11 @@
+-- ShadowMe Database Initialization Script
+-- This script runs when the database container is first created
+
+-- Create tables and initial schema here
+-- Example:
+-- CREATE TABLE IF NOT EXISTS users (
+--     id SERIAL PRIMARY KEY,
+--     username VARCHAR(255) NOT NULL UNIQUE,
+--     email VARCHAR(255) NOT NULL UNIQUE,
+--     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+-- );
