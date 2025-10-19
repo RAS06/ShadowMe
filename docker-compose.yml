@@ -36,19 +36,10 @@ services:
       - /app/node_modules
 
   database:
-    image: postgres:15-alpine
     container_name: shadowme-database
     ports:
       - "5432:5432"
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=shadowme
-    networks:
-      - shadowme-network
-    volumes:
-      - ./database/data:/var/lib/postgresql/data
-      - ./database/init:/docker-entrypoint-initdb.d
+
 
 networks:
   shadowme-network:
