@@ -1,19 +1,14 @@
-# Frontend Dockerfile
-FROM node:18-alpine
-
+FROM node:18-alpine AS build
 WORKDIR /app
-
-# Copy package files
 COPY package*.json ./
-
-# Install dependencies
 RUN npm install
-
-# Copy application files
 COPY . .
+RUN npm run build
 
-# Expose port
+FROM node:18-alpine
+WORKDIR /app
+COPY --from=build /app/dist ./dist
+COPY server.js ./server.js
+RUN npm install -g serve
 EXPOSE 3001
-
-# Start the application
-CMD ["npm", "start"]
+CMD ["node", "server.js"]

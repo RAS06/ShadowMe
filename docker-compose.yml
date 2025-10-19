@@ -7,15 +7,30 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NODE_ENV=development
-      - DATABASE_URL=postgresql://postgres:postgres@database:5432/shadowme
+      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres:postgres@database:5432/shadowme
+      MONGODB_URI: "mongodb://shadowuser:shadowpass@database:27017/shadowme?authSource=shadowme"
     depends_on:
       - database
     networks:
       - shadowme-network
+
+  database:
+    build:
+      context: ./database
+      dockerfile: Dockerfile
+    container_name: shadowme-database
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: adminpass
+      MONGO_INITDB_DATABASE: shadowme
     volumes:
-      - ./backend:/app
-      - /app/node_modules
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+      - database_data:/data/db
+    networks:
+      - shadowme-network
 
   frontend:
     build:
@@ -25,22 +40,25 @@ services:
     ports:
       - "3001:3001"
     environment:
-      - NODE_ENV=development
-      - REACT_APP_API_URL=http://localhost:3000
+      NODE_ENV: development
+      # For dev the browser needs to reach the backend via the host port
+      VITE_API_URL: http://localhost:3000
+    volumes:
+      # mount local source into container for hot reload
+      - ./frontend:/app:delegated
+      # preserve container-installed node_modules (so a host mount doesn't hide them)
+      - frontend_node_modules:/app/node_modules
+    command: sh -c "npm run dev -- --host 0.0.0.0 --port 3001"
     depends_on:
       - backend
     networks:
       - shadowme-network
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-
-  database:
-    container_name: shadowme-database
-    ports:
-      - "5432:5432"
-
 
 networks:
-  shadowme-network:
-    driver: bridge
+  shadowme-network: {}
+
+volumes:
+  database_data:
+    driver: local
+  frontend_node_modules:
+    driver: local
