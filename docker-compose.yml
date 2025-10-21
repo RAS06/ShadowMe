@@ -8,7 +8,7 @@ services:
       - "3000:3000"
     environment:
       NODE_ENV: development
-      MONGODB_URI: "mongodb+srv://rsyed3_db_user:IDpyZdojeWm3iK44@cluster0.dilxkqr.mongodb.net/shadowme?retryWrites=true&w=majority&appName=Cluster0"
+      MONGODB_URI: "PLACEHOLDER"
     networks:
       - shadowme-network
 
