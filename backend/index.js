@@ -2,45 +2,75 @@
 console.log('ShadowMe Backend Server');
 console.log('Server starting on port 3000...');
 
-// Express + MongoDB backend
-const express = require('express');
-const cors = require('cors');
-const { MongoClient } = require('mongodb');
+// Express + MongoDB backend (now using Mongoose)
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+const express = require('express')
+const cors = require('cors')
+const mongoose = require('mongoose')
+const cookieParser = require('cookie-parser')
 
-const port = process.env.PORT || 3000;
-const MONGODB_URI = process.env.MONGODB_URI || '';
+// load .env if present
+require('dotenv').config()
 
-let dbClient = null;
-let db = null;
+
+const app = express()
+app.use(cors({
+  origin: true,
+  credentials: true
+}))
+app.use(express.json())
+app.use(cookieParser())
+
+const port = process.env.PORT || 3000
+const MONGODB_URI = process.env.MONGODB_URI || ''
 
 async function connectDB() {
   if (!MONGODB_URI) {
-    console.warn('No MONGODB_URI provided; continuing without DB.');
-    return;
+    console.warn('No MONGODB_URI provided; continuing without DB.')
+    return
   }
-  dbClient = new MongoClient(MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
   try {
-    await dbClient.connect();
-    db = dbClient.db(process.env.MONGO_INITDB_DATABASE || 'shadowme');
-    console.log('Connected to MongoDB successfully.');
+    await mongoose.connect(MONGODB_URI, { dbName: process.env.MONGO_INITDB_DATABASE || 'shadowme' })
+    console.log('Connected to MongoDB via Mongoose successfully.')
   } catch (err) {
-    console.error('Failed to connect to MongoDB:', err.message || err);
+    console.error('Failed to connect to MongoDB (Mongoose):', err.message || err)
   }
 }
+
+// Export app and connectDB for use in server.js and tests
+module.exports = { app, connectDB };
 
 // Simple health endpoint
 app.get('/api/ping', (req, res) => res.json({ ok: true, time: Date.now() }));
 
 // Example endpoint that uses the DB if present
 app.get('/api/items', async (req, res) => {
-  if (!db) return res.status(503).json({ error: 'DB not available' });
-  const items = await db.collection('items').find().toArray();
-  res.json(items);
+  // If mongoose isn't connected yet, respond accordingly
+  if (mongoose.connection.readyState !== 1) return res.status(503).json({ error: 'DB not available' })
+  const Item = mongoose.model('Item', new mongoose.Schema({}, { strict: false, collection: 'items' }))
+  const items = await Item.find().lean().exec()
+  res.json(items)
 });
+
+// Mount auth routes
+const authRoutes = require('./routes/auth')
+app.use('/api/auth', authRoutes)
+
+// Protected route to return current user info
+const authMiddleware = require('./middleware/auth')
+app.get('/api/me', authMiddleware, async (req, res) => {
+  try {
+    const User = require('./models/User')
+    const user = await User.findOne({ id: req.user.id }).lean().exec()
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    // sanitize
+    const { passwordHash, _id, __v, ...safe } = user
+    res.json({ user: safe })
+  } catch (err) {
+    console.error('/api/me error', err)
+    res.status(500).json({ error: 'Failed to fetch user' })
+  }
+})
 
 // Serve static built frontend if present
 const path = require('path');
@@ -49,17 +79,4 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
 });
 
-const server = app.listen(port, async () => {
-  console.log(`Backend server listening on port ${port}`);
-  await connectDB();
-});
-
-process.on('SIGTERM', async () => {
-  console.log('Shutting down gracefully...');
-  try {
-    if (dbClient) await dbClient.close();
-  } catch (e) {
-    console.warn('Error closing DB client', e.message || e);
-  }
-  server.close(() => process.exit(0));
-});
+// Server startup moved to server.js

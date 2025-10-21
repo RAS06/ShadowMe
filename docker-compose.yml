@@ -8,27 +8,7 @@ services:
       - "3000:3000"
     environment:
       NODE_ENV: development
-      DATABASE_URL: postgresql://postgres:postgres@database:5432/shadowme
-      MONGODB_URI: "mongodb://shadowuser:shadowpass@database:27017/shadowme?authSource=shadowme"
-    depends_on:
-      - database
-    networks:
-      - shadowme-network
-
-  database:
-    build:
-      context: ./database
-      dockerfile: Dockerfile
-    container_name: shadowme-database
-    ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: adminpass
-      MONGO_INITDB_DATABASE: shadowme
-    volumes:
-      - ./database/init:/docker-entrypoint-initdb.d:ro
-      - database_data:/data/db
+      MONGODB_URI: "mongodb+srv://rsyed3_db_user:IDpyZdojeWm3iK44@cluster0.dilxkqr.mongodb.net/shadowme?retryWrites=true&w=majority&appName=Cluster0"
     networks:
       - shadowme-network
 
@@ -58,7 +38,5 @@ networks:
   shadowme-network: {}
 
 volumes:
-  database_data:
-    driver: local
   frontend_node_modules:
     driver: local
