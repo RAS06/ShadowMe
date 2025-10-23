@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   backend:
     build:
@@ -9,13 +11,19 @@ services:
     environment:
       - NODE_ENV=development
       - DATABASE_URL=postgresql://postgres:postgres@database:5432/shadowme
+      - JWT_SECRET=dev-jwt-secret-key
+      - JWT_EXPIRES_IN=24h
+      - JWT_REFRESH_SECRET=dev-refresh-token-secret
+      - JWT_REFRESH_EXPIRES_IN=7d
     depends_on:
-      - database
+      database:
+        condition: service_healthy
     networks:
       - shadowme-network
     volumes:
       - ./backend:/app
       - /app/node_modules
+    command: sh -c '/app/wait-for-it.sh database:5432 -- npm run dev'
 
   frontend:
     build:
@@ -23,10 +31,10 @@ services:
       dockerfile: Dockerfile
     container_name: shadowme-frontend
     ports:
-      - "3001:3001"
+      - "5173:5173"
     environment:
       - NODE_ENV=development
-      - REACT_APP_API_URL=http://localhost:3000
+      - VITE_API_URL=http://localhost:3000
     depends_on:
       - backend
     networks:
@@ -36,10 +44,26 @@ services:
       - /app/node_modules
 
   database:
+    image: postgres:15-alpine
     container_name: shadowme-database
     ports:
       - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=shadowme
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - shadowme-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
+volumes:
+  postgres_data:
 
 networks:
   shadowme-network:
