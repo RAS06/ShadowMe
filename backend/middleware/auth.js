@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 
-// Simple cookie parser for small use-case (we don't want to add a heavy dependency)
+// parseCookies not needed here because index.js uses cookie-parser; export a tiny helper anyway
 function parseCookies(cookieHeader) {
   const cookies = {};
   if (!cookieHeader) return cookies;
@@ -12,12 +12,19 @@ function parseCookies(cookieHeader) {
   return cookies;
 }
 
+// Primary middleware to enforce access token presence and validity
 function authenticateAccessToken(req, res, next) {
+  // Check Authorization header first
   const authHeader = req.header('Authorization');
-  const token = authHeader && authHeader.split(' ')[1];
+  let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+
+  // Fallback: check cookies (cookie-parser middleware should populate req.cookies)
+  if (!token && req && req.cookies) {
+    token = req.cookies.accessToken || req.cookies.token || null;
+  }
 
   if (!token) {
-    return res.status(401).json({ message: 'No access token, authorization denied' });
+    return res.status(401).json({ message: 'No access token provided' });
   }
 
   try {
@@ -25,6 +32,7 @@ function authenticateAccessToken(req, res, next) {
     req.user = decoded;
     return next();
   } catch (err) {
+    // Token expired or invalid
     return res.status(401).json({ message: 'Access token invalid or expired' });
   }
 }
@@ -33,13 +41,14 @@ function authenticateAccessToken(req, res, next) {
 function optionalAuthenticate(req, res, next) {
   try {
     const authHeader = req.header('Authorization');
-    const token = authHeader && authHeader.split(' ')[1];
+    let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+    if (!token && req && req.cookies) token = req.cookies.accessToken || req.cookies.token || null;
     if (token) {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       req.user = decoded;
     }
   } catch (err) {
-    // ignore errors; user will be unauthenticated
+    // ignore errors; user remains unauthenticated
   }
   return next();
 }

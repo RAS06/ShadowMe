@@ -10,20 +10,21 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=development
-      - DATABASE_URL=postgresql://postgres:postgres@database:5432/shadowme
+      - MONGODB_URI=mongodb://mongo:27017
+      - MONGODB_DB=shadowme
       - JWT_SECRET=dev-jwt-secret-key
       - JWT_EXPIRES_IN=24h
       - JWT_REFRESH_SECRET=dev-refresh-token-secret
       - JWT_REFRESH_EXPIRES_IN=7d
     depends_on:
-      database:
+      mongo:
         condition: service_healthy
     networks:
       - shadowme-network
     volumes:
       - ./backend:/app
       - /app/node_modules
-    command: sh -c '/app/wait-for-it.sh database:5432 -- npm run dev'
+    command: sh -c '/app/wait-for-it.sh mongo:27017 -- npm run dev'
 
   frontend:
     build:
@@ -43,27 +44,25 @@ services:
       - ./frontend:/app
       - /app/node_modules
 
-  database:
-    image: postgres:15-alpine
-    container_name: shadowme-database
+  mongo:
+    image: mongo:6.0
+    container_name: shadowme-mongo
     ports:
-      - "5432:5432"
+      - "27017:27017"
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=shadowme
+      - MONGO_INITDB_DATABASE=shadowme
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mongo_data:/data/db
     networks:
       - shadowme-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "mongosh --eval 'db.adminCommand(\"ping\")' || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 5
 
 volumes:
-  postgres_data:
+  mongo_data:
 
 networks:
   shadowme-network:

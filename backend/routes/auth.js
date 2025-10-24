@@ -2,11 +2,34 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { PrismaClient } = require('@prisma/client');
-const { authenticateAccessToken, parseCookies } = require('../middleware/auth');
+const { connect, getDb } = require('../utils/mongo');
+const { authenticateAccessToken } = require('../middleware/auth');
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
+// Helper to parse cookies if cookie-parser isn't used
+function parseCookies(header) {
+  const list = {};
+  if (!header) return list;
+  header.split(';').forEach(function (cookie) {
+    let parts = cookie.split('=');
+    list[parts.shift().trim()] = decodeURI(parts.join('='));
+  });
+  return list;
+}
+
+// Ensure DB connection middleware
+router.use(async (req, res, next) => {
+  try {
+    const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017';
+    const dbName = process.env.MONGODB_DB || 'shadowme';
+    await connect(uri, dbName);
+  } catch (err) {
+    console.error('Mongo connect error in auth routes:', err);
+    return res.status(500).json({ message: 'Database connection error' });
+  }
+  next();
+});
 
 // Signup endpoint
 router.post(
@@ -19,67 +42,48 @@ router.post(
   ],
   async (req, res) => {
     try {
-      // Validate input
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
       }
 
       const { email, password } = req.body;
+      const db = getDb();
 
-      // Check if user already exists
-      const existingUser = await prisma.user.findUnique({
-        where: { email },
-      });
-
-      if (existingUser) {
+      const existing = await db.collection('users').findOne({ email });
+      if (existing) {
         return res.status(400).json({ message: 'User already exists' });
       }
 
-      // Hash password
       const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
+      const hashed = await bcrypt.hash(password, salt);
 
-      // Create user
-      const user = await prisma.user.create({
-        data: {
-          email,
-          password: hashedPassword,
-        },
+      const result = await db.collection('users').insertOne({
+        email,
+        passwordHash: hashed,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       });
 
-      // Create access token
-      const accessToken = jwt.sign(
-        { userId: user.id },
-        process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN }
-      );
+      const userId = result.insertedId.toString();
 
-      // Create refresh token - long lived
-      const refreshToken = jwt.sign(
-        { userId: user.id },
-        process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }
-      );
+      const accessToken = jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '24h' });
+      const refreshToken = jwt.sign({ userId }, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET, { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' });
 
-      // Persist refresh token in DB
-      const expiresAt = new Date(Date.now() + (1000 * 60 * 60 * 24 * 7)); // 7 days
-      await prisma.refreshToken.create({
-        data: { token: refreshToken, userId: user.id, expiresAt }
-      });
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      await db.collection('refreshTokens').insertOne({ token: refreshToken, userId, revoked: false, createdAt: new Date(), expiresAt });
 
-      // Set httpOnly cookie for refresh token
       res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        maxAge: 7 * 24 * 60 * 60 * 1000,
       });
 
-      res.status(201).json({ token: accessToken });
-    } catch (error) {
-      console.error('Signup error:', error);
-      res.status(500).json({ message: 'Server error' });
+      return res.status(201).json({ token: accessToken });
+    } catch (err) {
+      console.error('Signup error (mongo):', err);
+      return res.status(500).json({ message: 'Server error' });
     }
   }
 );
@@ -93,100 +97,68 @@ router.post(
   ],
   async (req, res) => {
     try {
-      // Validate input
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
       }
 
       const { email, password } = req.body;
+      const db = getDb();
+      const user = await db.collection('users').findOne({ email });
+      if (!user) return res.status(400).json({ message: 'Invalid credentials' });
 
-      // Find user
-      const user = await prisma.user.findUnique({
-        where: { email },
-      });
+      const isMatch = await bcrypt.compare(password, user.passwordHash);
+      if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
 
-      if (!user) {
-        return res.status(400).json({ message: 'Invalid credentials' });
-      }
+      const userId = user._id.toString();
+      const accessToken = jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '24h' });
+      const refreshToken = jwt.sign({ userId }, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET, { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' });
 
-      // Check password
-      const isMatch = await bcrypt.compare(password, user.password);
-      if (!isMatch) {
-        return res.status(400).json({ message: 'Invalid credentials' });
-      }
-
-      // Create access token
-      const accessToken = jwt.sign(
-        { userId: user.id },
-        process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN }
-      );
-
-      // Create refresh token and persist
-      const refreshToken = jwt.sign(
-        { userId: user.id },
-        process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }
-      );
-
-      const expiresAt = new Date(Date.now() + (1000 * 60 * 60 * 24 * 7)); // 7 days
-      await prisma.refreshToken.create({
-        data: { token: refreshToken, userId: user.id, expiresAt }
-      });
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      await db.collection('refreshTokens').insertOne({ token: refreshToken, userId, revoked: false, createdAt: new Date(), expiresAt });
 
       res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        maxAge: 7 * 24 * 60 * 60 * 1000,
       });
 
-      res.json({ token: accessToken });
-    } catch (error) {
-      console.error('Login error:', error);
-      res.status(500).json({ message: 'Server error' });
+      return res.json({ token: accessToken });
+    } catch (err) {
+      console.error('Login error (mongo):', err);
+      return res.status(500).json({ message: 'Server error' });
     }
   }
 );
 
-// Logout endpoint (requires authentication)
-// Logout endpoint - clear refresh token cookie and mark token revoked
+// Logout endpoint
 router.post('/logout', async (req, res) => {
   try {
-    // Try to read refresh token from cookies
-    const cookies = parseCookies(req.header('cookie'));
-    const token = cookies.refreshToken;
+    const token = req.cookies?.refreshToken || parseCookies(req.header('cookie')).refreshToken;
+    const db = getDb();
     if (token) {
-      await prisma.refreshToken.updateMany({
-        where: { token },
-        data: { revoked: true }
-      });
+      await db.collection('refreshTokens').updateMany({ token }, { $set: { revoked: true } });
     }
 
-    // Clear cookie
     res.clearCookie('refreshToken', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
     return res.json({ message: 'Logged out successfully' });
   } catch (err) {
-    console.error('Logout error:', err);
+    console.error('Logout error (mongo):', err);
     return res.status(500).json({ message: 'Server error during logout' });
   }
 });
 
-// Refresh token endpoint - issues new access token (and rotate refresh token)
+// Refresh token endpoint
 router.post('/refresh-token', async (req, res) => {
   try {
-    const cookies = parseCookies(req.header('cookie'));
-    const token = cookies.refreshToken;
+    const token = req.cookies?.refreshToken || parseCookies(req.header('cookie')).refreshToken;
     if (!token) return res.status(401).json({ message: 'No refresh token provided' });
 
-    // Find stored refresh token
-    const stored = await prisma.refreshToken.findUnique({ where: { token } });
-    if (!stored || stored.revoked) {
-      return res.status(401).json({ message: 'Refresh token invalid' });
-    }
+    const db = getDb();
+    const stored = await db.collection('refreshTokens').findOne({ token });
+    if (!stored || stored.revoked) return res.status(401).json({ message: 'Refresh token invalid' });
 
-    // Verify token
     let payload;
     try {
       payload = jwt.verify(token, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET);
@@ -194,16 +166,13 @@ router.post('/refresh-token', async (req, res) => {
       return res.status(401).json({ message: 'Refresh token invalid or expired' });
     }
 
-    // Optionally rotate refresh token
     const userId = payload.userId;
-    // Revoke old token
-    await prisma.refreshToken.updateMany({ where: { token }, data: { revoked: true } });
+    await db.collection('refreshTokens').updateMany({ token }, { $set: { revoked: true } });
 
-    // Issue new tokens
-    const accessToken = jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN });
+    const accessToken = jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '24h' });
     const newRefreshToken = jwt.sign({ userId }, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET, { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' });
-    const expiresAt = new Date(Date.now() + (1000 * 60 * 60 * 24 * 7));
-    await prisma.refreshToken.create({ data: { token: newRefreshToken, userId, expiresAt } });
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await db.collection('refreshTokens').insertOne({ token: newRefreshToken, userId, revoked: false, createdAt: new Date(), expiresAt });
 
     res.cookie('refreshToken', newRefreshToken, {
       httpOnly: true,
@@ -214,27 +183,24 @@ router.post('/refresh-token', async (req, res) => {
 
     return res.json({ token: accessToken });
   } catch (err) {
-    console.error('Refresh token error:', err);
+    console.error('Refresh token error (mongo):', err);
     return res.status(500).json({ message: 'Server error during token refresh' });
   }
 });
 
-// Get current user (requires authentication)
-router.get('/me', auth, async (req, res) => {
+// Get current user endpoint - requires access token
+router.get('/me', authenticateAccessToken, async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.userId },
-      select: { id: true, email: true, createdAt: true },
-    });
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    res.json(user);
-  } catch (error) {
-    console.error('Get user error:', error);
-    res.status(500).json({ message: 'Server error' });
+    const db = getDb();
+    const { ObjectId } = require('mongodb');
+    const user = await db.collection('users').findOne({ _id: new ObjectId(req.user.userId) }, { projection: { passwordHash: 0 } });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    user.id = user._id.toString();
+    delete user._id;
+    return res.json(user);
+  } catch (err) {
+    console.error('Get user error (mongo):', err);
+    return res.status(500).json({ message: 'Server error' });
   }
 });
 

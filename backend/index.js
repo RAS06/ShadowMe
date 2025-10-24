@@ -24,18 +24,33 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Something broke!' });
 });
 
-// Only start the server if we're not in a test environment
-if (process.env.NODE_ENV !== 'test') {
-  const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
-    console.log('ShadowMe Backend Server');
-    console.log(`Server is running on port ${PORT}`);
-  });
+const startServer = async () => {
+  // If Mongo is required, ensure connection before starting
+  if (process.env.MONGODB_URI) {
+    const { connect } = require('./utils/mongo');
+    try {
+      await connect(process.env.MONGODB_URI, process.env.MONGODB_DB || 'shadowme');
+      console.log('Connected to MongoDB');
+    } catch (err) {
+      console.error('Failed to connect to MongoDB:', err);
+      process.exit(1);
+    }
+  }
 
-  process.on('SIGTERM', () => {
-    console.log('Shutting down gracefully...');
-    process.exit(0);
-  });
-}
+  if (process.env.NODE_ENV !== 'test') {
+    const PORT = process.env.PORT || 3000;
+    const server = app.listen(PORT, () => {
+      console.log('ShadowMe Backend Server');
+      console.log(`Server is running on port ${PORT}`);
+    });
+
+    process.on('SIGTERM', () => {
+      console.log('Shutting down gracefully...');
+      server.close(() => process.exit(0));
+    });
+  }
+};
+
+startServer();
 
 module.exports = app;
