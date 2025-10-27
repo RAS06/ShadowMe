@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   backend:
     build:
@@ -9,6 +11,8 @@ services:
     environment:
       - NODE_ENV=development
       - DATABASE_URL=postgresql://postgres:postgres@database:5432/shadowme
+      - JWT_ACCESS_SECRET=your_access_secret_here
+      - JWT_REFRESH_SECRET=your_refresh_secret_here
     depends_on:
       - database
     networks:
@@ -16,6 +20,7 @@ services:
     volumes:
       - ./backend:/app
       - /app/node_modules
+    command: npm run dev
 
   frontend:
     build:
@@ -26,7 +31,7 @@ services:
       - "3001:3001"
     environment:
       - NODE_ENV=development
-      - REACT_APP_API_URL=http://localhost:3000
+      - REACT_APP_API_URL=http://backend:3000
     depends_on:
       - backend
     networks:
@@ -34,13 +39,25 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    command: npm start
 
   database:
+    image: postgres:15
     container_name: shadowme-database
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: shadowme
     ports:
       - "5432:5432"
-
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - shadowme-network
 
 networks:
   shadowme-network:
     driver: bridge
+
+volumes:
+  db_data:
