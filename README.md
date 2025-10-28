@@ -1,56 +1,50 @@
 # ShadowMe
 
-A full-stack application with Docker support.
+Lightweight instructions to build and run the ShadowMe stack locally using Docker Compose.
 
-## Project Structure
+Project structure (top-level):
 
 ```
 ShadowMe/
-├── backend/           # Backend application
-│   ├── Dockerfile    # Docker configuration for backend
-│   └── README.md
-├── frontend/          # Frontend application
-│   ├── Dockerfile    # Docker configuration for frontend
-│   └── README.md
-├── database/          # Database files
-│   ├── init/         # Database initialization scripts
-│   └── README.md
-├── docker-compose.yml # Docker Compose configuration
+├── backend/
+├── frontend/
+├── database/
+├── docker-compose.yml
 └── README.md
 ```
 
-## Getting Started
+Quick start (build & run):
 
-### Prerequisites
-- Docker
-- Docker Compose
-
-### Running with Docker
-
-To start all services (backend, frontend, and database):
 ```bash
-docker-compose up
+# build images and start services in the background
+sudo docker compose up -d --build
+
+# view combined logs (follow)
+sudo docker compose logs -f
+
+# stop and remove containers and network
+sudo docker compose down
 ```
 
-To start services in detached mode:
-```bash
-docker-compose up -d
+Notes:
+- The stack is built to run all services in containers. `sudo` may be required if your user is not in the `docker` group.
+- Backend: http://localhost:3000
+- Frontend: http://localhost:3001
+
+Database credentials (MongoDB created by init script in `database/init`):
+- admin user (root): admin / adminpass
+- app user on `shadowme` DB: shadowuser / shadowpass
+
+Backend connection string (used in compose):
+```
+MONGODB_URI=mongodb://shadowuser:shadowpass@database:27017/shadowme?authSource=shadowme
 ```
 
-To stop all services:
+If you want to avoid `sudo` for Docker, add your user to the docker group and re-login:
+
 ```bash
-docker-compose down
+sudo usermod -aG docker $USER
+# then either run `newgrp docker` or log out and back in
 ```
 
-### Services
-
-- **Backend**: Runs on `http://localhost:3000`
-- **Frontend**: Runs on `http://localhost:3001`
-- **Database**: PostgreSQL on `localhost:5432`
-
-## Development
-
-See individual README files in each directory for specific development instructions:
-- [Backend README](./backend/README.md)
-- [Frontend README](./frontend/README.md)
-- [Database README](./database/README.md)
+See the subfolder READMEs for per-service development notes.
