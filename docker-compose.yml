@@ -6,9 +6,10 @@ services:
     container_name: shadowme-backend
     ports:
       - "3000:3000"
+    env_file:
+      - backend/.env
     environment:
       NODE_ENV: development
-      MONGODB_URI: "PLACEHOLDER"
     networks:
       - shadowme-network
 

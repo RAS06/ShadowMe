@@ -31,6 +31,30 @@ Notes:
 - Backend: http://localhost:3000
 - Frontend: http://localhost:3001
 
+Admin API key (promote users to doctor)
+-------------------------------------
+
+The backend exposes an admin endpoint to promote a registered user to a doctor role: `POST /api/admin/promote`.
+For production safety, set an `ADMIN_API_KEY` environment variable in `backend/.env` and include it on requests via the
+`x-admin-key` header. Example:
+
+```http
+POST /api/admin/promote
+x-admin-key: <your-admin-api-key>
+Content-Type: application/json
+
+{
+	"userId": "<user-id>",
+	"clinicName": "Clinic Name",
+	"address": "123 Main St",
+	"location": { "coordinates": [lng, lat] }
+}
+```
+
+If `ADMIN_API_KEY` is not configured the endpoint requires an authenticated JWT that belongs to a user with the `admin` role.
+Make sure to keep the API key secret and rotate it periodically. Don't commit real keys to git.
+
+
 Database credentials (MongoDB created by init script in `database/init`):
 - admin user (root): admin / adminpass
 - app user on `shadowme` DB: shadowuser / shadowpass

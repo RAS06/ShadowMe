@@ -6,6 +6,8 @@ const jwt = require('jsonwebtoken')
 const crypto = require('crypto')
 const User = require('../models/User')
 const RefreshToken = require('../models/RefreshToken')
+const Doctor = require('../models/Doctor')
+const Student = require('../models/Student')
 
 const { z } = require('zod');
 // Zod schemas with approved regexes
@@ -56,10 +58,17 @@ router.post('/register', async (req, res) => {
   }
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
-    const errors = parsed.error && parsed.error.errors ? parsed.error.errors.map(e => e.message).join(', ') : 'Validation failed';
-    return res.status(400).json({ error: errors });
+    const errors = parsed.error && parsed.error.errors ? parsed.error.errors.map(e => ({ path: e.path, message: e.message })) : ['Validation failed'];
+    // In development, include raw parse error details to help debugging
+    if ((process.env.NODE_ENV || 'development') !== 'production') {
+      console.warn('Register validation failed:', JSON.stringify(errors))
+      return res.status(400).json({ error: 'Validation failed', details: errors })
+    }
+    return res.status(400).json({ error: 'Validation failed' });
   }
   const { fullName, email, password } = parsed.data;
+  // profile data
+  const profileData = req.body.profile || {}
   try {
     const existing = await User.findOne({ email })
     if (existing) return res.status(409).json({ error: 'Email already registered' })
@@ -67,14 +76,18 @@ router.post('/register', async (req, res) => {
     const salt = await bcrypt.genSalt(10)
     const passwordHash = await bcrypt.hash(password, salt)
 
-    const user = new User({ fullName, email, passwordHash })
-    await user.save()
+    // Always create a Student profile on registration. Doctor accounts must be created via admin promotion.
+    const address = profileData.address || ''
+    const location = profileData.location && Array.isArray(profileData.location.coordinates)
+      ? { type: 'Point', coordinates: profileData.location.coordinates }
+      : { type: 'Point', coordinates: [0, 0] }
+    const student = new Student({ address, location })
+    await student.save()
 
-    // update lastLoginAt
-    user.lastLoginAt = new Date()
+    // create user once with profile link and initial lastLoginAt
+    const user = new User({ fullName, email, passwordHash, role: 'student', profileId: student.id, lastLoginAt: new Date() })
     await user.save()
-
-    const token = jwt.sign({ sub: user.id, email: user.email }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES_IN })
+  const token = jwt.sign({ sub: user.id, email: user.email, role: user.role, profileId: user.profileId }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES_IN })
 
     // create refresh token stored in DB (hashed)
     const { raw: refreshToken } = await createRefreshTokenForUser(user.id)
@@ -87,7 +100,7 @@ router.post('/register', async (req, res) => {
       maxAge: REFRESH_TOKEN_TTL_MS
     })
 
-    res.json({ token, user: { id: user.id, fullName: user.fullName, email: user.email, emailVerified: user.emailVerified } })
+    res.json({ token, user: { id: user.id, fullName: user.fullName, email: user.email, emailVerified: user.emailVerified, role: user.role, profileId: user.profileId } })
   } catch (err) {
     console.error('Registration error', err)
     res.status(500).json({ error: 'Registration failed' })
@@ -112,7 +125,7 @@ router.post('/login', async (req, res) => {
     user.lastLoginAt = new Date()
     await user.save()
 
-    const token = jwt.sign({ sub: user.id, email: user.email }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES_IN })
+  const token = jwt.sign({ sub: user.id, email: user.email, role: user.role, profileId: user.profileId }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES_IN })
 
     // create refresh token stored in DB (hashed)
     const { raw: refreshToken } = await createRefreshTokenForUser(user.id)
@@ -125,7 +138,7 @@ router.post('/login', async (req, res) => {
       maxAge: REFRESH_TOKEN_TTL_MS
     })
 
-    res.json({ token, user: { id: user.id, fullName: user.fullName, email: user.email, emailVerified: user.emailVerified } })
+    res.json({ token, user: { id: user.id, fullName: user.fullName, email: user.email, emailVerified: user.emailVerified, role: user.role, profileId: user.profileId } })
   } catch (err) {
     console.error('Login error', err)
     res.status(500).json({ error: 'Login failed' })
@@ -171,7 +184,7 @@ router.post('/refresh',
         maxAge: REFRESH_TOKEN_TTL_MS
       })
 
-      const accessToken = jwt.sign({ sub: user.id, email: user.email }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES_IN })
+  const accessToken = jwt.sign({ sub: user.id, email: user.email, role: user.role, profileId: user.profileId }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES_IN })
       res.json({ token: accessToken })
     } catch (err) {
       console.error('Refresh error', err)

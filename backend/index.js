@@ -56,6 +56,22 @@ app.get('/api/items', async (req, res) => {
 const authRoutes = require('./routes/auth')
 app.use('/api/auth', authRoutes)
 
+// Mount appointments routes
+const appointmentsRoutes = require('./routes/appointments')
+app.use('/api/appointments', appointmentsRoutes)
+
+// Mount admin routes
+const adminRoutes = require('./routes/admin')
+app.use('/api/admin', adminRoutes)
+
+// Mount dev-only utilities (seed token)
+try {
+  const devRoutes = require('./routes/dev')
+  app.use('/api/dev', devRoutes)
+} catch (e) {
+  // ignore if not present
+}
+
 // Protected route to return current user info
 const authMiddleware = require('./middleware/auth')
 app.get('/api/me', authMiddleware, async (req, res) => {
