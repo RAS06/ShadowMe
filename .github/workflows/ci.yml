@@ -29,12 +29,22 @@ jobs:
           CI: true
           MONGOMS_FORCE_DOWNLOAD: 'true'
 
-      - name: Run backend tests (Jest)
+      - name: Run backend tests (Jest with coverage)
         working-directory: backend
         run: |
-          npm test
+          # run tests and emit lcov coverage report
+          npm test -- --coverage --coverageDirectory=coverage --coverageReporters=lcov
         env:
           CI: true
+
+      - name: Upload backend coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: backend/coverage/lcov.info
+          fail_ci_if_error: true
+        env:
+          # set CODECOV_TOKEN in repo secrets if this is a private repo
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   frontend:
     name: Frontend tests (Vitest)
@@ -59,9 +69,18 @@ jobs:
         env:
           CI: true
 
-      - name: Run frontend tests (Vitest)
+      - name: Run frontend tests (Vitest with coverage)
         working-directory: frontend
         run: |
-          npm test -- --run
+          # run vitest and emit coverage (lcov)
+          npm test -- --run --coverage
         env:
           CI: true
+
+      - name: Upload frontend coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: frontend/coverage/lcov.info
+          fail_ci_if_error: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
