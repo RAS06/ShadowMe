@@ -81,7 +81,8 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: |
-          npm ci
+          # Some vitest coverage providers have strict peer deps; use legacy-peer-deps to avoid CI install failures
+          npm ci --legacy-peer-deps
         env:
           CI: true
 
