@@ -1,9 +1,9 @@
-import { defineConfig } from 'vitest/config'
+const path = require('path')
 
-export default defineConfig({
+module.exports = {
   test: {
     environment: 'jsdom',
     globals: true,
-    setupFiles: ['./vitest.setup.js']
+    setupFiles: [path.resolve(__dirname, 'vitest.setup.js')]
   }
-})
+}
