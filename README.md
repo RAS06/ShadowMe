@@ -183,3 +183,13 @@ npm test -- --run --coverage
 
 ---
 
+## Next steps / backlog suggestions
+
+- Persist `bookedByName` at booking time to avoid repeated lookups on reads.
+- Add integration tests that run against docker-compose services to verify end-to-end flows (booking, cancelling, admin promote).
+- Improve token refresh on the frontend to gracefully handle expired access tokens and automatic refresh using the refresh-token cookie.
+- Add richer address geocoding on the frontend when doctors create openings (help users provide human-friendly addresses).
+
+---
+
+If you'd like, I can also add a `CONTRIBUTING.md` that outlines the local dev workflow, branch naming, and PR expectations (tests passing + Codecov threshold).
