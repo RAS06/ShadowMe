@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* small helper: use direct CSS colors to avoid @apply issues during build */
+:root {
+	--app-pink: #ffe4ec;
+	--app-pink-strong: #ffd1e8;
+	--app-blue: #a6e0ff; /* lighter baby blue */
+	--app-blue-contrast: #00223a; /* dark navy for contrast on light baby blue */
+}
+
+body {
+	margin: 0;
+	padding: 0;
+	background-color: var(--app-pink) !important;
+	color: #1F2937;
+}
+
+/* Override common Tailwind background utility classes used in the app */
+.bg-blue-600, .bg-gray-200, .bg-red-50, .bg-white, .bg-gray-100, .bg-gray-50 {
+	background-color: var(--app-pink) !important;
+}
+
+/* Buttons and small UI surfaces */
+button, .app-logout, .card, .btn {
+	background-color: var(--app-pink-strong) !important;
+	font-family: 'Dancing Script', cursive !important; /* girly font for buttons */
+}
+
+/* Nav and containers */
+.app-nav, .app-nav-links, .container, .max-w-3xl, .max-w-6xl {
+	background-color: transparent !important; /* keep container transparent but body is pink */
+}
+
+/* NAV BAR: baby-blue full-width bar with taller height */
+.app-nav {
+	position: relative;
+	left: 50%;
+	right: 50%;
+	margin-left: -50vw; /* pull nav to full viewport left */
+	margin-right: -50vw; /* pull nav to full viewport right */
+	width: 100vw !important;
+	background-color: var(--app-blue) !important;
+	color: var(--app-blue-contrast) !important;
+	height: 72px; /* increased height */
+	display: flex;
+	align-items: center; /* vertically center inner content */
+	z-index: 50;
+}
+
+/* keep content centered within the full-width nav */
+.nav-inner {
+	width: 100%;
+	max-width: 1200px;
+	margin: 0 auto;
+	padding-left: 24px;
+	padding-right: 24px;
+	display: flex;
+	align-items: center;
+	gap: 16px;
+}
+
+.app-nav-links {
+	display: flex;
+	gap: 16px;
+}
+
+.app-nav a {
+	color: var(--app-blue-contrast) !important;
+	text-decoration: none;
+	font-family: 'Dancing Script', cursive !important;
+}
+
+.app-logout {
+	margin-left: auto;
+	padding: 8px 14px;
+	font-size: 16px;
+	border-radius: 8px;
+	background-color: rgba(0,0,0,0.06) !important; /* subtle dark-ish button for contrast */
+	color: var(--app-blue-contrast) !important;
+	border: 1px solid rgba(0,0,0,0.08);
+	font-family: 'Dancing Script', cursive !important;
+}
+
+

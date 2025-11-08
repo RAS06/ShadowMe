@@ -24,11 +24,35 @@ app.use(cookieParser())
 const port = process.env.PORT || 3000
 const MONGODB_URI = process.env.MONGODB_URI || ''
 
+let _mongoMemoryServer = null
+
 async function connectDB() {
+  // If a real MONGODB_URI is provided, use it. Otherwise try to start an in-memory MongoDB
   if (!MONGODB_URI) {
+    try {
+      // start mongodb-memory-server only when available (dev/test)
+      const { MongoMemoryServer } = require('mongodb-memory-server')
+      _mongoMemoryServer = await MongoMemoryServer.create()
+      const memUri = _mongoMemoryServer.getUri()
+      await mongoose.connect(memUri, { dbName: process.env.MONGO_INITDB_DATABASE || 'shadowme' })
+      console.log('Connected to in-memory MongoDB via mongodb-memory-server.')
+      // ensure we stop the memory server when mongoose disconnects
+      mongoose.connection.on('disconnected', async () => {
+        try {
+          if (_mongoMemoryServer) await _mongoMemoryServer.stop()
+        } catch (e) {
+          // ignore
+        }
+      })
+      return
+    } catch (err) {
+      console.warn('mongodb-memory-server not available or failed to start. Falling back to MONGODB_URI if provided.')
+      // fallthrough to attempt MONGODB_URI connect (may be empty)
+    }
     console.warn('No MONGODB_URI provided; continuing without DB.')
     return
   }
+
   try {
     await mongoose.connect(MONGODB_URI, { dbName: process.env.MONGO_INITDB_DATABASE || 'shadowme' })
     console.log('Connected to MongoDB via Mongoose successfully.')
@@ -37,8 +61,17 @@ async function connectDB() {
   }
 }
 
+async function stopDB() {
+  try {
+    await mongoose.disconnect()
+  } catch (e) {}
+  try {
+    if (_mongoMemoryServer) await _mongoMemoryServer.stop()
+  } catch (e) {}
+}
+
 // Export app and connectDB for use in server.js and tests
-module.exports = { app, connectDB };
+module.exports = { app, connectDB, stopDB };
 
 // Simple health endpoint
 app.get('/api/ping', (req, res) => res.json({ ok: true, time: Date.now() }));
@@ -55,6 +88,30 @@ app.get('/api/items', async (req, res) => {
 // Mount auth routes
 const authRoutes = require('./routes/auth')
 app.use('/api/auth', authRoutes)
+
+// Mount appointments routes
+const appointmentsRoutes = require('./routes/appointments')
+app.use('/api/appointments', appointmentsRoutes)
+
+// Mount admin routes
+const adminRoutes = require('./routes/admin')
+app.use('/api/admin', adminRoutes)
+
+// Mount doctors routes (doctor profile management)
+try {
+  const doctorsRoutes = require('./routes/doctors')
+  app.use('/api/doctors', doctorsRoutes)
+} catch (e) {
+  console.warn('doctors routes not present', e.message)
+}
+
+// Mount dev-only utilities (seed token)
+try {
+  const devRoutes = require('./routes/dev')
+  app.use('/api/dev', devRoutes)
+} catch (e) {
+  // ignore if not present
+}
 
 // Protected route to return current user info
 const authMiddleware = require('./middleware/auth')

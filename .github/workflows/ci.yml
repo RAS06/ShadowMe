@@ -1,0 +1,108 @@
+name: CI - tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  backend:
+    name: Backend tests (Jest)
+    runs-on: ubuntu-latest
+    # Use mongodb-memory-server in tests (no external mongo service required).
+    env:
+      # force mongodb-memory-server to download its binary in CI runners
+      MONGOMS_FORCE_DOWNLOAD: 'true'
+      MONGO_INITDB_DATABASE: 'shadowme_test'
+      NODE_ENV: 'test'
+      # When running in CI use the service below as the MongoDB for tests
+      MONGODB_URI: 'mongodb://mongo:27017/shadowme_test'
+    services:
+      mongo:
+        image: mongo:6.0
+        env:
+          MONGO_INITDB_DATABASE: shadowme_test
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'" \
+          --health-interval 10s \
+          --health-timeout 5s \
+          --health-retries 5
+    strategy:
+      matrix:
+        node-version: [18.x]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          npm ci
+        env:
+          CI: true
+          MONGOMS_FORCE_DOWNLOAD: 'true'
+
+      - name: Wait for MongoDB service
+        run: |
+          echo "Waiting for mongo service on mongo:27017..."
+          for i in $(seq 1 30); do
+            if nc -z mongo 27017 >/dev/null 2>&1; then
+              echo "MongoDB service is up"
+              break
+            fi
+            echo "MongoDB not ready, retrying ($i/30)..."
+            sleep 1
+          done
+
+      - name: Run backend tests (Jest with coverage)
+        working-directory: backend
+        run: |
+          # run tests and emit lcov coverage report
+          npm test -- --coverage --coverageDirectory=coverage --coverageReporters=lcov
+        env:
+          CI: true
+
+      - name: Upload backend coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: backend/coverage/lcov.info
+          fail_ci_if_error: true
+        env:
+          # set CODECOV_TOKEN in repo secrets if this is a private repo
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  frontend:
+    name: Frontend tests (Vitest)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: |
+          npm ci --legacy-peer-deps
+        env:
+          CI: true
+
+      - name: Run frontend tests (Vitest)
+        working-directory: frontend
+        run: |
+          # run vitest (no coverage to avoid coverage provider issues)
+          npm test -- --run
+        env:
+          CI: true

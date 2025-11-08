@@ -12,6 +12,9 @@ RUN npm install
 # Copy application files
 COPY . .
 
+# Create directory for seed-token.json
+RUN mkdir -p /app/frontend/public
+
 # Expose port
 EXPOSE 3000
 

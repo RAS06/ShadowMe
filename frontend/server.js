@@ -30,6 +30,29 @@ function sendFile(filePath, res) {
 }
 
 const server = http.createServer((req, res) => {
+  // Proxy API requests starting with /api/ to backend (http://localhost:3000)
+  if (req.url.startsWith('/api/')) {
+    const target = new URL('http://127.0.0.1:3000' + req.url)
+    const proxyReq = http.request({
+      hostname: target.hostname,
+      port: target.port,
+      path: target.pathname + (target.search || ''),
+      method: req.method,
+      headers: req.headers
+    }, proxyRes => {
+      res.writeHead(proxyRes.statusCode, proxyRes.headers)
+      proxyRes.pipe(res, { end: true })
+    })
+    proxyReq.on('error', err => {
+      console.error('Proxy error', err)
+      res.writeHead(502)
+      res.end('Bad Gateway')
+    })
+    // forward request body
+    req.pipe(proxyReq, { end: true })
+    return
+  }
+
   let urlPath = req.url.split('?')[0]
   if (urlPath === '/') urlPath = '/index.html'
   const filePath = path.join(distDir, decodeURIComponent(urlPath))
@@ -39,7 +62,14 @@ const server = http.createServer((req, res) => {
     res.end('Forbidden')
     return
   }
-  sendFile(filePath, res)
+  // If the requested file doesn't exist, serve index.html so the SPA router can handle client-side routes
+  fs.stat(filePath, (err, stats) => {
+    if (err || !stats.isFile()) {
+      const indexPath = path.join(distDir, 'index.html')
+      return sendFile(indexPath, res)
+    }
+    sendFile(filePath, res)
+  })
 })
 
 server.listen(port, '0.0.0.0', () => {
