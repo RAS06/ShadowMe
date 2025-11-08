@@ -8,18 +8,10 @@ jobs:
   backend:
     name: Backend tests (Jest)
     runs-on: ubuntu-latest
-    # provide a MongoDB service so Jest / the app can connect during CI
-    services:
-      mongodb:
-        image: mongo:6.0
-        ports:
-          - 27017:27017
-        options: >-
-          --bind_ip_all
+    # Use mongodb-memory-server in tests (no external mongo service required).
     env:
-      # point the app/tests to the MongoDB service above
-      MONGODB_URI: "mongodb://mongodb:27017/shadowme?authSource=admin"
-      MONGO_INITDB_DATABASE: shadowme
+      # force mongodb-memory-server to download its binary in CI runners
+      MONGOMS_FORCE_DOWNLOAD: 'true'
     strategy:
       matrix:
         node-version: [18.x]
@@ -40,6 +32,18 @@ jobs:
         env:
           CI: true
           MONGOMS_FORCE_DOWNLOAD: 'true'
+
+      - name: Wait for MongoDB to be ready
+        run: |
+          echo "Waiting for mongodb:27017..."
+          for i in $(seq 1 30); do
+            if nc -z mongodb 27017 >/dev/null 2>&1; then
+              echo "MongoDB is up"
+              break
+            fi
+            echo "MongoDB not ready, retrying ($i/30)..."
+            sleep 1
+          done
 
       - name: Run backend tests (Jest with coverage)
         working-directory: backend
