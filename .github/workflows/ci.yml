@@ -14,6 +14,18 @@ jobs:
       MONGOMS_FORCE_DOWNLOAD: 'true'
       MONGO_INITDB_DATABASE: 'shadowme_test'
       NODE_ENV: 'test'
+      # When running in CI use the service below as the MongoDB for tests
+      MONGODB_URI: 'mongodb://mongo:27017/shadowme_test'
+    services:
+      mongo:
+        image: mongo:6.0
+        env:
+          MONGO_INITDB_DATABASE: shadowme_test
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'" \
+          --health-interval 10s \
+          --health-timeout 5s \
+          --health-retries 5
     strategy:
       matrix:
         node-version: [18.x]
@@ -34,6 +46,18 @@ jobs:
         env:
           CI: true
           MONGOMS_FORCE_DOWNLOAD: 'true'
+
+      - name: Wait for MongoDB service
+        run: |
+          echo "Waiting for mongo service on mongo:27017..."
+          for i in $(seq 1 30); do
+            if nc -z mongo 27017 >/dev/null 2>&1; then
+              echo "MongoDB service is up"
+              break
+            fi
+            echo "MongoDB not ready, retrying ($i/30)..."
+            sleep 1
+          done
 
       - name: Run backend tests (Jest with coverage)
         working-directory: backend
