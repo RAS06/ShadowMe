@@ -8,6 +8,18 @@ jobs:
   backend:
     name: Backend tests (Jest)
     runs-on: ubuntu-latest
+    # provide a MongoDB service so Jest / the app can connect during CI
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+        options: >-
+          --bind_ip_all
+    env:
+      # point the app/tests to the MongoDB service above
+      MONGODB_URI: "mongodb://mongodb:27017/shadowme?authSource=admin"
+      MONGO_INITDB_DATABASE: shadowme
     strategy:
       matrix:
         node-version: [18.x]
