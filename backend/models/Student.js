@@ -4,8 +4,8 @@ const studentSchema = new mongoose.Schema({
   id: { type: String, default: () => require('crypto').randomUUID(), unique: true, index: true },
   address: { type: String, default: '' },
   location: {
-    type: { type: String, enum: ['Point'], default: 'Point' },
-    coordinates: { type: [Number], default: [0, 0] } // [lng, lat]
+    type: { type: String, enum: ['Point'], default: undefined },
+    coordinates: { type: [Number], default: undefined } // [lng, lat]
   },
   // array of booked appointments (embedded minimal info)
   appointments: [{
@@ -13,8 +13,8 @@ const studentSchema = new mongoose.Schema({
     start: { type: Date, required: true },
     end: { type: Date },
     location: {
-      type: { type: String, enum: ['Point'], default: 'Point' },
-      coordinates: { type: [Number], default: [0, 0] }
+      type: { type: String, enum: ['Point'], default: undefined },
+      coordinates: { type: [Number], default: undefined }
     }
   }],
   // optional link to a preferred doctor

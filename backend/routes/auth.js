@@ -78,10 +78,13 @@ router.post('/register', async (req, res) => {
 
     // Always create a Student profile on registration. Doctor accounts must be created via admin promotion.
     const address = profileData.address || ''
-    const location = profileData.location && Array.isArray(profileData.location.coordinates)
-      ? { type: 'Point', coordinates: profileData.location.coordinates }
-      : { type: 'Point', coordinates: [0, 0] }
-    const student = new Student({ address, location })
+    let loc
+    if (profileData.location && Array.isArray(profileData.location.coordinates) && profileData.location.coordinates.length === 2) {
+      const lng = parseFloat(profileData.location.coordinates[0])
+      const lat = parseFloat(profileData.location.coordinates[1])
+      if (isFinite(lng) && isFinite(lat)) loc = { type: 'Point', coordinates: [lng, lat] }
+    }
+    const student = new Student({ address, location: loc })
     await student.save()
 
     // create user once with profile link and initial lastLoginAt
@@ -217,3 +220,39 @@ router.post('/revoke',
 )
 
 module.exports = router
+
+// GET /api/auth/me - return authenticated user's basic info and linked profile (student/doctor)
+router.get('/me', require('../middleware/auth'), async (req, res) => {
+  try {
+    const userId = req.user && req.user.id
+    if (!userId) return res.status(401).json({ error: 'Missing auth' })
+    const User = require('../models/User')
+    const user = await User.findOne({ id: userId }).lean().exec()
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    const out = { id: user.id, fullName: user.fullName, email: user.email, role: user.role, profileId: user.profileId }
+    // attach profile basic info if available
+    if (user.profileId) {
+      if (user.role === 'student') {
+        const Student = require('../models/Student')
+        const s = await Student.findOne({ id: user.profileId }).lean().exec()
+        if (s) out.profile = { address: s.address, location: s.location, name: s.name || undefined }
+      } else if (user.role === 'doctor') {
+        const Doctor = require('../models/Doctor')
+        const d = await Doctor.findOne({ id: user.profileId }).lean().exec()
+        if (d) out.profile = { clinicName: d.clinicName, address: d.address, location: d.location }
+      }
+    }
+    // Debug: log the shaped user object we are about to return so frontend data issues can be traced
+    if ((process.env.NODE_ENV || 'development') !== 'production') {
+      try {
+        console.log('GET /api/auth/me -> returning user:', JSON.stringify(out))
+      } catch (e) {
+        console.log('GET /api/auth/me -> returning user (non-serializable):', out)
+      }
+    }
+    res.json({ user: out })
+  } catch (err) {
+    console.error('Me route error', err)
+    res.status(500).json({ error: 'Failed to fetch user' })
+  }
+})

@@ -1,5 +1,6 @@
 
 import React from 'react'
+import './index.css'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import App from './App'
@@ -9,6 +10,8 @@ import Dashboard from './Dashboard'
 import ProtectedRoute from './ProtectedRoute'
 import DoctorDashboard from './DoctorDashboard'
 import StudentDashboard from './StudentDashboard'
+import StudentProfile from './StudentProfile'
+import DevDebug from './DevDebug'
 
 // Development helper: fetch a fresh seed token from backend dev endpoint so token always matches backend secret
 if (process.env.NODE_ENV !== 'production') {
@@ -28,6 +31,7 @@ if (process.env.NODE_ENV !== 'production') {
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
+      <DevDebug />
       <Routes>
         <Route path="/" element={<App />} />
         <Route path="/login" element={<Login />} />
@@ -65,6 +69,10 @@ createRoot(document.getElementById('root')).render(
             }
             if (!u) {
               const token = localStorage.getItem('sm_token')
+              const _srDebugForce = (typeof window !== 'undefined' && window.location.search && window.location.search.indexOf('debug=1') !== -1)
+              if (process.env.NODE_ENV !== 'production' || _srDebugForce) {
+                try { console.debug('Student route check - tokenPresent:', !!token, 'rawSmUser:', raw) } catch (e) {}
+              }
               if (token) {
                 try { const parts = token.split('.') ; if (parts.length === 3) u = JSON.parse(atob(parts[1])) } catch (e) { u = null }
               }
@@ -89,7 +97,6 @@ createRoot(document.getElementById('root')).render(
             }
             if (!u) return <Navigate to="/login" />
             if (u.role !== 'student') return <Navigate to="/dashboard" />
-            const StudentProfile = require('./StudentProfile').default
             return <StudentProfile />
           })()}
         </ProtectedRoute>} />

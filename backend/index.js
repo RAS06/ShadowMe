@@ -64,6 +64,14 @@ app.use('/api/appointments', appointmentsRoutes)
 const adminRoutes = require('./routes/admin')
 app.use('/api/admin', adminRoutes)
 
+// Mount doctors routes (doctor profile management)
+try {
+  const doctorsRoutes = require('./routes/doctors')
+  app.use('/api/doctors', doctorsRoutes)
+} catch (e) {
+  console.warn('doctors routes not present', e.message)
+}
+
 // Mount dev-only utilities (seed token)
 try {
   const devRoutes = require('./routes/dev')

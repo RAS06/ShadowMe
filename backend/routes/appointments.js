@@ -10,7 +10,7 @@ router.post('/doctor/:doctorId/openings', auth, requireRole('doctor'), async (re
   try {
     // In a real app, you'd verify req.user is the doctor; here we assume role is checked elsewhere
     const { doctorId } = req.params
-  const { start, end, location } = req.body
+  const { start, end, location, address } = req.body
     if (!start) return res.status(400).json({ error: 'start is required' })
     // validate optional location object
     if (location) {
@@ -25,9 +25,21 @@ router.post('/doctor/:doctorId/openings', auth, requireRole('doctor'), async (re
     const doc = await Doctor.findOne({ id: doctorId })
     if (!doc) return res.status(404).json({ error: 'Doctor not found' })
   const appt = { start: new Date(start), end: end ? new Date(end) : undefined }
-  if (location && location.coordinates && Array.isArray(location.coordinates)) {
-    appt.location = { type: 'Point', coordinates: [parseFloat(location.coordinates[0]), parseFloat(location.coordinates[1])] }
+  if (address) appt.address = String(address)
+  // Determine appointment location: prefer provided location, otherwise fall back to doctor's clinic location if available
+  let chosenLocation
+  if (location && Array.isArray(location.coordinates) && location.coordinates.length === 2) {
+    const lng = parseFloat(location.coordinates[0])
+    const lat = parseFloat(location.coordinates[1])
+    if (isFinite(lng) && isFinite(lat)) chosenLocation = { type: 'Point', coordinates: [lng, lat] }
   }
+  // fallback to doctor's clinic location if no explicit appointment location provided
+  if (!chosenLocation && doc.location && Array.isArray(doc.location.coordinates) && doc.location.coordinates.length === 2) {
+    const lng = parseFloat(doc.location.coordinates[0])
+    const lat = parseFloat(doc.location.coordinates[1])
+    if (isFinite(lng) && isFinite(lat)) chosenLocation = { type: 'Point', coordinates: [lng, lat] }
+  }
+  if (chosenLocation) appt.location = chosenLocation
   doc.appointments.push(appt)
     await doc.save()
     res.json({ ok: true, appointments: doc.appointments })
@@ -62,8 +74,24 @@ router.get('/nearby', auth, async (req, res) => {
       doctorName: d.doctorName,
       // doctor-level location omitted (we moved locations to appointments), include null or aggregated if desired
       location: null,
-      openings: (d.appointments || []).filter(a => !a.isBooked)
+      // include address on each opening (use appointment.address when present, otherwise doctor's clinic address)
+      openings: (d.appointments || []).filter(a => !a.isBooked).map(a => ({ ...a, address: a.address || d.address }))
     }))
+    // resolve bookedByStudentId -> name for returned openings if any (defensive)
+    const User = require('../models/User')
+    for (const d of result) {
+      for (const o of d.openings || []) {
+        if (o.bookedByStudentId) {
+          try {
+            const u = await User.findOne({ profileId: o.bookedByStudentId }).lean().exec()
+            if (u && u.fullName) o.bookedByName = u.fullName
+            else o.bookedByName = o.bookedByStudentId
+          } catch (e) {
+            o.bookedByName = o.bookedByStudentId
+          }
+        }
+      }
+    }
     res.json(result)
   } catch (err) {
     console.error('Nearby error', err)
@@ -108,6 +136,8 @@ router.post('/book/:doctorId', auth, requireRole('student'), async (req, res) =>
     if (student) {
       const studAppt = { doctorId: doc.id, start: slot.start, end: slot.end }
       if (slot.location) studAppt.location = slot.location
+      // prefer slot-specific address, otherwise use doctor's clinic address
+      studAppt.address = slot.address || doc.address || undefined
       student.appointments.push(studAppt)
       await student.save()
     }
@@ -119,16 +149,124 @@ router.post('/book/:doctorId', auth, requireRole('student'), async (req, res) =>
   }
 })
 
+// Student cancels a booked appointment
+// Accepts DELETE /api/appointments/book/:doctorId with body { appointmentId?, start?, studentId? }
+router.delete('/book/:doctorId', auth, requireRole('student'), async (req, res) => {
+  try {
+    const { doctorId } = req.params
+    const { appointmentId, start } = req.body || {}
+    let { studentId } = req.body || {}
+    if (!studentId && req.user && req.user.profileId) studentId = req.user.profileId
+    if (!studentId) return res.status(400).json({ error: 'studentId required' })
+
+    const doc = await Doctor.findOne({ id: doctorId })
+    if (!doc) return res.status(404).json({ error: 'Doctor not found' })
+
+    let idx = -1
+    if (appointmentId) {
+      idx = doc.appointments.findIndex(a => a.appointmentId === appointmentId && a.isBooked && a.bookedByStudentId === studentId)
+    } else if (start) {
+      const startIso = new Date(start).toISOString()
+      idx = doc.appointments.findIndex(a => new Date(a.start).toISOString() === startIso && a.isBooked && a.bookedByStudentId === studentId)
+    } else {
+      return res.status(400).json({ error: 'appointmentId or start required' })
+    }
+    if (idx === -1) return res.status(404).json({ error: 'Booked appointment not found for this student' })
+
+    // Unset the booking on the doctor appointment
+    const update = { $set: {} }
+    update.$set[`appointments.${idx}.isBooked`] = false
+    update.$set[`appointments.${idx}.bookedByStudentId`] = null
+
+    const updated = await Doctor.findOneAndUpdate({ id: doctorId }, update, { new: true }).lean().exec()
+    const slot = updated.appointments[idx]
+
+    // Remove from student's appointments array (match by appointmentId or start time + doctorId)
+    const student = await Student.findOne({ id: studentId })
+    if (student) {
+      let removeIdx = -1
+      if (appointmentId) {
+        removeIdx = student.appointments.findIndex(a => a.appointmentId === appointmentId || a.appointmentId === appointmentId)
+      }
+      if (removeIdx === -1 && start) {
+        const startIso = new Date(start).toISOString()
+        removeIdx = student.appointments.findIndex(a => new Date(a.start).toISOString() === startIso && a.doctorId === doctorId)
+      }
+      if (removeIdx !== -1) {
+        student.appointments.splice(removeIdx, 1)
+        await student.save()
+      }
+    }
+
+    res.json({ ok: true, slot })
+  } catch (err) {
+    console.error('Cancel booking error', err)
+    res.status(500).json({ error: 'Failed to cancel booking' })
+  }
+})
+
 // Doctor can list their appointments
 router.get('/doctor/:doctorId', auth, async (req, res) => {
   try {
     const { doctorId } = req.params
-    const doc = await Doctor.findOne({ id: doctorId }).lean().exec()
-    if (!doc) return res.status(404).json({ error: 'Doctor not found' })
-    res.json({ appointments: doc.appointments })
+  const doc = await Doctor.findOne({ id: doctorId }).lean().exec()
+  if (!doc) return res.status(404).json({ error: 'Doctor not found' })
+    // ensure each appointment includes an address (appointment.address || doctor's clinic address)
+    let appts = (doc.appointments || []).map(a => ({ ...a, address: a.address || doc.address }))
+    // resolve bookedByStudentId to a readable name when possible
+    const User = require('../models/User')
+    for (let i = 0; i < appts.length; i++) {
+      const a = appts[i]
+      if (a.bookedByStudentId) {
+        try {
+          const u = await User.findOne({ profileId: a.bookedByStudentId }).lean().exec()
+          if (u && u.fullName) a.bookedByName = u.fullName
+          else a.bookedByName = a.bookedByStudentId
+        } catch (e) {
+          a.bookedByName = a.bookedByStudentId
+        }
+      }
+    }
+    res.json({ appointments: appts })
   } catch (err) {
     console.error('Doctor list error', err)
     res.status(500).json({ error: 'Failed to fetch doctor appointments' })
+  }
+})
+
+// Student can list their booked appointments
+// Route allowing client to fetch the authenticated student's appointments
+// Also keep the existing /student/:studentId route for backwards compatibility
+router.get('/student', auth, requireRole('student'), async (req, res) => {
+  try {
+    const studentId = req.user && req.user.profileId
+    if (!studentId) return res.status(400).json({ error: 'Missing student profile' })
+    const student = await Student.findOne({ id: studentId }).lean().exec()
+    if (!student) return res.status(404).json({ error: 'Student not found' })
+    // Debug: log appointments being returned
+    if ((process.env.NODE_ENV || 'development') !== 'production') {
+      try {
+        console.log('GET /api/appointments/student -> studentId:', studentId, 'appointments:', JSON.stringify(student.appointments || []))
+      } catch (e) {
+        console.log('GET /api/appointments/student -> appointments (non-serializable) for', studentId)
+      }
+    }
+    res.json({ appointments: student.appointments || [] })
+  } catch (err) {
+    console.error('Student list error', err)
+    res.status(500).json({ error: 'Failed to fetch student appointments' })
+  }
+})
+
+router.get('/student/:studentId', auth, requireRole('student'), async (req, res) => {
+  try {
+    const { studentId } = req.params
+    const student = await Student.findOne({ id: studentId }).lean().exec()
+    if (!student) return res.status(404).json({ error: 'Student not found' })
+    res.json({ appointments: student.appointments || [] })
+  } catch (err) {
+    console.error('Student list error', err)
+    res.status(500).json({ error: 'Failed to fetch student appointments' })
   }
 })
 

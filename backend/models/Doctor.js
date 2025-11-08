@@ -5,10 +5,12 @@ const appointmentSchema = new mongoose.Schema({
   appointmentId: { type: String, default: () => require('crypto').randomUUID(), index: true },
   start: { type: Date, required: true },
   end: { type: Date, required: false },
+  // optional human-readable address for the appointment location (derived from doctor's input)
+  address: { type: String, default: undefined },
   // appointment-specific location (GeoJSON Point) - doctor does not hold location globally
   location: {
-    type: { type: String, enum: ['Point'], default: 'Point' },
-    coordinates: { type: [Number], default: [0, 0] } // [lng, lat]
+    type: { type: String, enum: ['Point'], default: undefined },
+    coordinates: { type: [Number], default: undefined } // [lng, lat]
   },
   // whether this slot is booked and by which student id
   isBooked: { type: Boolean, default: false },
@@ -24,6 +26,12 @@ const doctorSchema = new mongoose.Schema({
   address: { type: String, required: true },
   // doctor-level fields (clinic info) - appointment locations are stored on appointment subdocuments
   doctorName: { type: String, required: true },
+  // optional clinic-level location (GeoJSON Point) for display / default pickup coordinates
+  location: {
+    type: { type: String, enum: ['Point'], default: undefined },
+    // avoid defaulting to an empty array (which can create invalid GeoJSON); only set when provided
+    coordinates: { type: [Number], default: undefined }
+  },
   appointments: { type: [appointmentSchema], default: [] }
 }, {
   collection: 'doctors',

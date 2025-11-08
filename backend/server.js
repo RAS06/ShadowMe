@@ -23,7 +23,16 @@ const server = app.listen(port, async () => {
       const token = jwt.sign(payload, secret, { expiresIn: process.env.DEV_SEED_EXPIRES || '30d' })
       const out = { token, user: { id: payload.sub, email: payload.email, role: payload.role, profileId: payload.profileId } }
       const target = path.join(__dirname, '..', 'frontend', 'public', 'seed-token.json')
-      try { fs.writeFileSync(target, JSON.stringify(out, null, 2), 'utf8'); console.log('Wrote dev seed token to', target) } catch (err) { console.warn('Failed to write seed-token.json', err && err.message) }
+      const targetDir = path.join(__dirname, '..', 'frontend', 'public');
+      try {
+        if (!fs.existsSync(targetDir)) {
+          fs.mkdirSync(targetDir, { recursive: true });
+        }
+        fs.writeFileSync(target, JSON.stringify(out, null, 2), 'utf8');
+        console.log('Wrote dev seed token to', target)
+      } catch (err) {
+        console.warn('Failed to write seed-token.json', err && err.message)
+      }
     }
   } catch (e) {
     console.warn('Dev seed token generation failed', e && e.message)

@@ -47,6 +47,7 @@ export default function DoctorBookings() {
             {b.isCompleted ? <span style={{ marginLeft: 8 }}> (completed)</span> : (
               <button style={{ marginLeft: 8 }} onClick={() => markCompleted(b.start, b.appointmentId)}>Mark completed</button>
             )}
+            {b.bookedByName && <small style={{ marginLeft: 8 }}> (booked by {b.bookedByName})</small>}
           </li>
         ))}
       </ul>

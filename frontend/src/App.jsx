@@ -5,13 +5,13 @@ export default function App() {
   const navigate = useNavigate()
 
   return (
-    <div style={{ fontFamily: 'Arial, sans-serif', padding: 24, maxWidth: 720, margin: '0 auto' }}>
-      <h1>ShadowMe</h1>
-      <p>This is the ShadowMe landing page. Use the buttons below to sign in or create a new account.</p>
+    <div className="font-sans p-6 max-w-3xl mx-auto">
+      <h1 className="text-2xl font-bold">ShadowMe</h1>
+      <p className="mt-2 text-gray-700">This is the ShadowMe landing page. Use the buttons below to sign in or create a new account.</p>
 
-      <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
-        <button onClick={() => navigate('/login')} style={{ padding: '10px 18px', fontSize: 16 }}>Log in</button>
-        <button onClick={() => navigate('/signup')} style={{ padding: '10px 18px', fontSize: 16 }}>Sign up</button>
+      <div className="flex gap-3 mt-6">
+        <button onClick={() => navigate('/login')} className="px-4 py-2 text-base bg-blue-600 text-white rounded">Log in</button>
+        <button onClick={() => navigate('/signup')} className="px-4 py-2 text-base bg-gray-200 rounded">Sign up</button>
       </div>
     </div>
   )

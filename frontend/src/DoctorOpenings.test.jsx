@@ -26,6 +26,8 @@ describe('DoctorOpenings', () => {
   it('creates an opening and refreshes list', async () => {
     // initial load
     api.mockResolvedValueOnce({ ok: true, json: async () => ({ appointments: [] }) })
+  // doctor profile load (clinic info)
+  api.mockResolvedValueOnce({ ok: true, json: async () => ({ clinicName: '', address: '' }) })
     // POST create returns ok
     api.mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) })
     // refresh returns one opening
@@ -36,18 +38,19 @@ describe('DoctorOpenings', () => {
     // wait initial load
     await waitFor(() => expect(api).toHaveBeenCalled())
 
+    // prepare a fake geocode response for Nominatim
+    global.fetch = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ([{ lat: '37.7749', lon: '-122.4194' }]) })
     // fill start input and submit
     const startInput = screen.getByLabelText(/Start:/i)
     const createButton = screen.getByRole('button', { name: /Create Opening/i })
   await userEvent.type(startInput, '2025-10-30T20:00')
-  const latInput = screen.getByLabelText(/Location Lat:/i)
-  const lngInput = screen.getByLabelText(/Lng:/i)
-  await userEvent.type(latInput, '37.7749')
-  await userEvent.type(lngInput, '-122.4194')
+  const addrInputs = screen.getAllByLabelText(/Address:/i)
+  const addrInput = addrInputs.find(input => input.closest('form')) // Select the Address input within the Create Opening form
+  await userEvent.type(addrInput, '1 Dr Carlton B Goodlett Pl, San Francisco, CA')
     await userEvent.click(createButton)
 
-    // api was called 3 times (load, create, refresh)
-    await waitFor(() => expect(api).toHaveBeenCalledTimes(3))
+  // api was called 4 times (load openings, load doctor profile, create, refresh)
+  await waitFor(() => expect(api).toHaveBeenCalledTimes(4))
     expect(globalThis.alert).toHaveBeenCalledWith('Opening created')
     expect(screen.getByText(/available/i)).toBeInTheDocument()
   })

@@ -44,8 +44,14 @@ router.post('/promote', async (req, res, next) => {
     if (!user) return res.status(404).json({ error: 'User not found' })
 
     // create doctor profile
-    const loc = location && Array.isArray(location.coordinates) ? { type: 'Point', coordinates: location.coordinates } : { type: 'Point', coordinates: [0,0] }
-  const doctor = new Doctor({ clinicName: clinicName || `${user.fullName}'s Clinic`, address: address || 'Unknown address', location: loc, doctorName: user.fullName })
+    // Only set clinic-level location if valid numeric coordinates are provided; otherwise leave undefined
+    let loc
+    if (location && Array.isArray(location.coordinates) && location.coordinates.length === 2) {
+      const lng = parseFloat(location.coordinates[0])
+      const lat = parseFloat(location.coordinates[1])
+      if (isFinite(lng) && isFinite(lat)) loc = { type: 'Point', coordinates: [lng, lat] }
+    }
+    const doctor = new Doctor({ clinicName: clinicName || `${user.fullName}'s Clinic`, address: address || 'Unknown address', location: loc, doctorName: user.fullName })
     await doctor.save()
 
   user.role = 'doctor'
