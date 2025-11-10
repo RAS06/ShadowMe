@@ -87,7 +87,7 @@ router.post('/register', async (req, res) => {
       maxAge: REFRESH_TOKEN_TTL_MS
     })
 
-    res.json({ token, user: { id: user.id, fullName: user.fullName, email: user.email, emailVerified: user.emailVerified } })
+    res.json({ token, user: { id: user.id, fullName: user.fullName, email: user.email, emailVerified: user.emailVerified, role: user.role || 'student' } })
   } catch (err) {
     console.error('Registration error', err)
     res.status(500).json({ error: 'Registration failed' })
@@ -125,7 +125,7 @@ router.post('/login', async (req, res) => {
       maxAge: REFRESH_TOKEN_TTL_MS
     })
 
-    res.json({ token, user: { id: user.id, fullName: user.fullName, email: user.email, emailVerified: user.emailVerified } })
+    res.json({ token, user: { id: user.id, fullName: user.fullName, email: user.email, emailVerified: user.emailVerified, role: user.role || 'student' } })
   } catch (err) {
     console.error('Login error', err)
     res.status(500).json({ error: 'Login failed' })

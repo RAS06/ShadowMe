@@ -6,6 +6,9 @@ import App from './App'
 import Login from './Login'
 import Signup from './Signup'
 import Dashboard from './Dashboard'
+import CreateAppointment from './CreateAppointment'
+import BookAppointment from './BookAppointment'
+import ManageAppointments from './ManageAppointments'
 import ProtectedRoute from './ProtectedRoute'
 
 createRoot(document.getElementById('root')).render(
@@ -18,6 +21,21 @@ createRoot(document.getElementById('root')).render(
         <Route path="/dashboard" element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/appointments/create" element={
+          <ProtectedRoute>
+            <CreateAppointment />
+          </ProtectedRoute>
+        } />
+        <Route path="/appointments/book" element={
+          <ProtectedRoute>
+            <BookAppointment />
+          </ProtectedRoute>
+        } />
+        <Route path="/appointments/manage" element={
+          <ProtectedRoute>
+            <ManageAppointments />
           </ProtectedRoute>
         } />
       </Routes>

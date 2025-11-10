@@ -1,4 +1,19 @@
 services:
+  database:
+    build:
+      context: ./database
+      dockerfile: Dockerfile
+    container_name: shadowme-database
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: adminpass
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - shadowme-network
+
   backend:
     build:
       context: ./backend
@@ -8,7 +23,10 @@ services:
       - "3000:3000"
     environment:
       NODE_ENV: development
-      MONGODB_URI: "PLACEHOLDER"
+      MONGODB_URI: "mongodb://shadowuser:shadowpass@database:27017/shadowme?authSource=shadowme"
+      ADMIN_API_KEY: "shadowme-admin-key-2025-secure"
+    depends_on:
+      - database
     networks:
       - shadowme-network
 
@@ -16,6 +34,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: development
     container_name: shadowme-frontend
     ports:
       - "3001:3001"
@@ -38,5 +57,7 @@ networks:
   shadowme-network: {}
 
 volumes:
+  mongo_data:
+    driver: local
   frontend_node_modules:
     driver: local

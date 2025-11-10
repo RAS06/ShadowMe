@@ -56,6 +56,14 @@ app.get('/api/items', async (req, res) => {
 const authRoutes = require('./routes/auth')
 app.use('/api/auth', authRoutes)
 
+// Mount appointment routes
+const appointmentRoutes = require('./routes/appointments')
+app.use('/api/appointments', appointmentRoutes)
+
+// Mount admin routes
+const adminRoutes = require('./routes/admin')
+app.use('/api/admin', adminRoutes)
+
 // Protected route to return current user info
 const authMiddleware = require('./middleware/auth')
 app.get('/api/me', authMiddleware, async (req, res) => {
