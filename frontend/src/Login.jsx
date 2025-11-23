@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import api from './api'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -12,7 +13,7 @@ export default function Login() {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     setError('')
     if (!validateEmail(email)) {
@@ -23,31 +24,22 @@ export default function Login() {
       setError('Password must be at least 6 characters.')
       return
     }
-    const api = import.meta.env.VITE_API_URL || 'http://localhost:3000'
-    fetch(`${api}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    }).then(async res => {
-      if (!res.ok) {
-        let msg = 'Login failed'
-        try {
-          const data = await res.json()
-          msg = data.error || msg
-        } catch (e) {
-          msg = await res.text()
-        }
-        setError(msg)
+    try {
+      const res = await api.post('/api/auth/login', { email, password })
+      const data = res.data
+      if (!data || !data.token) {
+        setError('Login failed: invalid response from server')
         return
       }
-      const data = await res.json()
       localStorage.setItem('sm_token', data.token)
       localStorage.setItem('sm_user', JSON.stringify(data.user))
       navigate('/dashboard')
-    }).catch(err => {
+    } catch (err) {
       console.error('Login error', err)
-      setError('Login failed')
-    })
+      // Prefer server-provided message
+      const msg = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Login failed'
+      setError(typeof msg === 'string' ? msg : 'Login failed')
+    }
   }
 
   return (

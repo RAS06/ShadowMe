@@ -45,29 +45,26 @@ export default function Signup() {
       setError('Password must be at least 8 characters, contain at least 2 numbers and 2 special characters.');
       return;
     }
-    const api = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-    fetch(`${api}/api/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fullName: name, email, password })
-    }).then(async res => {
-      if (!res.ok) {
-        let msg = 'Registration failed';
-        try {
-          const data = await res.json();
-          msg = data.error || msg;
-        } catch (e) {
-          msg = await res.text();
-        }
-        setError(msg);
+    try {
+      // import API wrapper from axios instance
+      // note: import is at top of file (below) - dynamic resolution may vary depending on bundler
+      // we call the API endpoint and expect { success: true } or similar
+      const apiModule = await import('./api')
+      const api = apiModule.default
+      const res = await api.post('/api/auth/register', { fullName: name, email, password })
+      if (res?.status >= 200 && res.status < 300) {
+        setSuccess(true);
+        setTimeout(() => navigate('/login'), 1800);
         return;
       }
-      setSuccess(true);
-      setTimeout(() => navigate('/login'), 1800);
-    }).catch(err => {
+      const data = res?.data
+      const msg = data?.error || data?.message || 'Registration failed'
+      setError(msg)
+    } catch (err) {
       console.error('Registration error', err);
-      setError('Registration failed');
-    });
+      const msg = err?.response?.data?.error || err?.message || 'Registration failed'
+      setError(typeof msg === 'string' ? msg : 'Registration failed')
+    }
   }
 
   return (

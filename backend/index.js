@@ -8,12 +8,26 @@ const express = require('express')
 const cors = require('cors')
 const mongoose = require('mongoose')
 const cookieParser = require('cookie-parser')
+const Sentry = require('@sentry/node')
+const Tracing = require('@sentry/tracing')
 
 // load .env if present
 require('dotenv').config()
 
+// Initialize Sentry on backend if DSN provided
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: 0.1
+  })
+}
+
 
 const app = express()
+// Request handler must be the first middleware on the app
+if (process.env.SENTRY_DSN) app.use(Sentry.Handlers.requestHandler())
+
 app.use(cors({
   origin: true,
   credentials: true
@@ -43,6 +57,11 @@ module.exports = { app, connectDB };
 // Simple health endpoint
 app.get('/api/ping', (req, res) => res.json({ ok: true, time: Date.now() }));
 
+// Test route to intentionally throw an error (captures in Sentry)
+app.get('/sentry/test-error', (req, res) => {
+  throw new Error('Test backend error for Sentry');
+});
+
 // Example endpoint that uses the DB if present
 app.get('/api/items', async (req, res) => {
   // If mongoose isn't connected yet, respond accordingly
@@ -55,6 +74,14 @@ app.get('/api/items', async (req, res) => {
 // Mount auth routes
 const authRoutes = require('./routes/auth')
 app.use('/api/auth', authRoutes)
+
+// Mount AI routes
+try {
+  const aiRoutes = require('./routes/ai')
+  app.use('/ai', aiRoutes)
+} catch (e) {
+  console.warn('AI routes not available (prisma/openai may not be installed yet).')
+}
 
 // Protected route to return current user info
 const authMiddleware = require('./middleware/auth')
@@ -80,3 +107,6 @@ app.get('/', (req, res) => {
 });
 
 // Server startup moved to server.js
+
+// The Sentry error handler should be before other error handlers and last middleware
+if (process.env.SENTRY_DSN) app.use(Sentry.Handlers.errorHandler())

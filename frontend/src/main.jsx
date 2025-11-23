@@ -7,6 +7,17 @@ import Login from './Login'
 import Signup from './Signup'
 import Dashboard from './Dashboard'
 import ProtectedRoute from './ProtectedRoute'
+import * as Sentry from '@sentry/react'
+
+// Initialize Sentry if DSN is provided
+const dsn = import.meta.env.VITE_SENTRY_DSN || ''
+if (dsn) {
+  Sentry.init({
+    dsn,
+    environment: import.meta.env.MODE || 'development',
+    tracesSampleRate: 0.1
+  })
+}
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -24,3 +35,4 @@ createRoot(document.getElementById('root')).render(
     </BrowserRouter>
   </React.StrictMode>
 )
+
