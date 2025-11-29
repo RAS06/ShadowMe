@@ -109,8 +109,9 @@ router.post('/book/:doctorId', auth, requireRole('student'), async (req, res) =>
   if (!studentId && req.user && req.user.profileId) studentId = req.user.profileId
   if (!studentId) return res.status(400).json({ error: 'studentId required' })
   // validate student exists
-  const studentRecord = await Student.findOne({ id: studentId })
-  if (!studentRecord) return res.status(404).json({ error: 'Student not found' })
+    console.log('Booking request for doctorId=', doctorId, 'studentId=', studentId, 'authUser=', req.user && req.user.id)
+    const studentRecord = await Student.findOne({ id: studentId })
+    if (!studentRecord) return res.status(404).json({ error: 'Student not found' })
     // atomic update: find doctor with matching unbooked appointment and set it booked
     const doc = await Doctor.findOne({ id: doctorId })
     if (!doc) return res.status(404).json({ error: 'Doctor not found' })

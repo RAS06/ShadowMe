@@ -48,6 +48,7 @@ export default function NavBar({ onLogout }) {
               if (process.env.NODE_ENV !== 'production' || _force) console.debug('Nav click Student - tokenPresent:', !!localStorage.getItem('sm_token'), 'rawSmUser:', localStorage.getItem('sm_user'))
             } catch (e) {}
           }}>Student</Link>}
+              {user && <Link to="/chat">Chat</Link>}
         </div>
         <button onClick={() => {
           if (!window.confirm('Log out?')) return;

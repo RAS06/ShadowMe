@@ -42,7 +42,22 @@ export default function StudentNearby() {
 
   async function bookSlot(doctorId, appointment) {
     try {
-      const userRaw = localStorage.getItem('sm_user')
+      let userRaw = localStorage.getItem('sm_user')
+      // If sm_user missing or stale, try to fetch current user from server
+      if (!userRaw) {
+        try {
+          const meRes = await api('/api/me')
+          if (meRes.ok) {
+            const mj = await meRes.json()
+            if (mj && mj.user) {
+              localStorage.setItem('sm_user', JSON.stringify(mj.user))
+              userRaw = localStorage.getItem('sm_user')
+            }
+          }
+        } catch (e) {
+          // ignore — we'll handle missing user below
+        }
+      }
       if (!userRaw) return alert('Missing user')
       const user = JSON.parse(userRaw)
       const studentId = user.profileId

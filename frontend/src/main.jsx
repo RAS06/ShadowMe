@@ -12,6 +12,8 @@ import DoctorDashboard from './DoctorDashboard'
 import StudentDashboard from './StudentDashboard'
 import StudentProfile from './StudentProfile'
 import DevDebug from './DevDebug'
+import ChatList from './ChatList'
+import ChatRoom from './ChatRoom'
 
 // Development helper: fetch a fresh seed token from backend dev endpoint so token always matches backend secret
 if (process.env.NODE_ENV !== 'production') {
@@ -100,6 +102,8 @@ createRoot(document.getElementById('root')).render(
             return <StudentProfile />
           })()}
         </ProtectedRoute>} />
+        <Route path="/chat" element={<ProtectedRoute><ChatList/></ProtectedRoute>} />
+        <Route path="/chat/:roomId" element={<ProtectedRoute><ChatRoom/></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>
