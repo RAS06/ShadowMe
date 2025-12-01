@@ -4,12 +4,10 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: shadowme-backend
-    ports:
-      - "3000:3000"
+    environment:
+      NODE_ENV: production
     env_file:
       - backend/.env
-    environment:
-      NODE_ENV: development
     networks:
       - shadowme-network
 
@@ -17,17 +15,30 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: https://localhost
     container_name: shadowme-frontend
-    ports:
-      - "3001:3001"
     environment:
       NODE_ENV: production
-      VITE_API_URL: http://localhost:3000
-    # In Docker we serve the pre-built `dist` for reliability. Do not mount source or node_modules.
-    # This avoids hiding container-installed dependencies (e.g. the PostCSS plugin).
     command: sh -c "node server.js"
     depends_on:
       - backend
+    networks:
+      - shadowme-network
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: shadowme-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - backend
+      - frontend
     networks:
       - shadowme-network
 

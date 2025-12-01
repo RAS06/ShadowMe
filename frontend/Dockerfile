@@ -3,6 +3,9 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm install --legacy-peer-deps
 COPY . .
+# Set API URL for build time (Vite embeds env vars at build time)
+ARG VITE_API_URL=https://localhost
+ENV VITE_API_URL=${VITE_API_URL}
 RUN npm run build
 # Ensure Tailwind's final CSS is available in dist in case PostCSS wasn't applied by Vite
 # Use the Tailwind CLI (installed as a devDependency) to process src/index.css into dist/assets

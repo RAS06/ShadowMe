@@ -2,6 +2,7 @@ import React from 'react'
 import NavBar from './NavBar'
 import DoctorOpenings from './DoctorOpenings'
 import DoctorBookings from './DoctorBookings'
+import DoctorChatList from './DoctorChatList'
 
 export default function DoctorDashboard() {
   function handleLogout() {
@@ -17,8 +18,10 @@ export default function DoctorDashboard() {
       <h2>Doctor Dashboard</h2>
       <p>Manage your clinic openings and view bookings.</p>
       <DoctorOpenings />
-  <hr />
-  <DoctorBookings />
+      <hr />
+      <DoctorBookings />
+      <hr />
+      <DoctorChatList />
     </div>
   )
 }

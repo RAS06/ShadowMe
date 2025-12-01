@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import api from './api'
+import ChatRoom from './ChatRoom'
 
 export default function DoctorBookings() {
   const [booked, setBooked] = useState([])
+  const [activeChatRoom, setActiveChatRoom] = useState(null)
 
   useEffect(() => {
     async function load() {
@@ -48,9 +50,26 @@ export default function DoctorBookings() {
               <button style={{ marginLeft: 8 }} onClick={() => markCompleted(b.start, b.appointmentId)}>Mark completed</button>
             )}
             {b.bookedByName && <small style={{ marginLeft: 8 }}> (booked by {b.bookedByName})</small>}
+            <button 
+              style={{ marginLeft: 8, backgroundColor: '#3b82f6', color: 'white', padding: '4px 12px', borderRadius: '4px', border: 'none', cursor: 'pointer' }} 
+              onClick={() => setActiveChatRoom({ 
+                appointmentId: b.appointmentId || b._id,
+                studentName: b.bookedByName || 'Student'
+              })}
+            >
+              💬 Chat
+            </button>
           </li>
         ))}
       </ul>
+
+      {activeChatRoom && (
+        <ChatRoom
+          appointmentId={activeChatRoom.appointmentId}
+          otherPartyName={activeChatRoom.studentName}
+          onClose={() => setActiveChatRoom(null)}
+        />
+      )}
     </div>
   )
 }

@@ -1,10 +1,95 @@
 // Separate server startup for production/dev
 const { app, connectDB } = require('./index');
 const mongoose = require('mongoose');
+const http = require('http');
+const { Server } = require('socket.io');
+const jwt = require('jsonwebtoken');
+const ChatMessage = require('./models/ChatMessage');
 const port = parseInt(process.env.PORT, 10) || 3000;
 
+// Create HTTP server and attach Socket.io
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: true,
+    credentials: true
+  }
+});
+
+// Socket.io authentication middleware
+io.use((socket, next) => {
+  try {
+    const token = socket.handshake.auth.token;
+    if (!token) {
+      return next(new Error('Authentication error'));
+    }
+    const secret = process.env.JWT_SECRET || 'replace_this_with_a_secure_random_string';
+    const decoded = jwt.verify(token, secret);
+    socket.userId = decoded.sub || decoded.id;
+    socket.userRole = decoded.role;
+    socket.userEmail = decoded.email;
+    next();
+  } catch (err) {
+    next(new Error('Authentication error'));
+  }
+});
+
+// Socket.io connection handler
+io.on('connection', (socket) => {
+  console.log(`User connected: ${socket.userId} (${socket.userRole})`);
+
+  // Join a chat room
+  socket.on('join-room', (appointmentId) => {
+    socket.join(appointmentId);
+    console.log(`User ${socket.userId} joined room ${appointmentId}`);
+  });
+
+  // Handle sending messages
+  socket.on('send-message', async (data) => {
+    try {
+      const { appointmentId, message } = data;
+      
+      // Create and save the message
+      const chatMessage = new ChatMessage({
+        appointmentId,
+        senderId: socket.userId,
+        senderRole: socket.userRole,
+        senderName: socket.userEmail || 'User',
+        message,
+        timestamp: new Date()
+      });
+      
+      await chatMessage.save();
+
+      // Broadcast to room
+      io.to(appointmentId).emit('new-message', {
+        id: chatMessage._id,
+        appointmentId,
+        senderId: socket.userId,
+        senderRole: socket.userRole,
+        senderName: socket.userEmail || 'User',
+        message,
+        timestamp: chatMessage.timestamp
+      });
+    } catch (err) {
+      console.error('Error sending message:', err);
+      socket.emit('error', { message: 'Failed to send message' });
+    }
+  });
+
+  // Leave room
+  socket.on('leave-room', (appointmentId) => {
+    socket.leave(appointmentId);
+    console.log(`User ${socket.userId} left room ${appointmentId}`);
+  });
+
+  socket.on('disconnect', () => {
+    console.log(`User disconnected: ${socket.userId}`);
+  });
+});
+
 // Start server and attach error handler for common listen errors
-const server = app.listen(port, async () => {
+server.listen(port, async () => {
   console.log(`Backend server listening on port ${port}`);
   await connectDB();
   // Development helper: regenerate frontend seed token so dev UI always gets a valid JWT

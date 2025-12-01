@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react'
 import api from './api'
+import ChatRoom from './ChatRoom'
 
 export default function StudentProfile() {
   const [profile, setProfile] = useState(null)
   const [appointments, setAppointments] = useState([])
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState('')
+  const [activeChatRoom, setActiveChatRoom] = useState(null)
 
   useEffect(() => {
     async function load() {
@@ -125,6 +127,12 @@ export default function StudentProfile() {
             <div>
               {a.start ? new Date(a.start).toLocaleString() : JSON.stringify(a)}
               <button style={{ marginLeft: 8 }} onClick={() => cancelAppointment(a)}>Cancel</button>
+              <button 
+                style={{ marginLeft: 8, backgroundColor: '#3b82f6', color: 'white', padding: '4px 12px', borderRadius: '4px', border: 'none', cursor: 'pointer' }} 
+                onClick={() => setActiveChatRoom({ appointmentId: a.doctorId, doctorName: 'Doctor' })}
+              >
+                💬 Chat
+              </button>
             </div>
             {a.address ? (
               <div style={{ marginTop: 4 }}>
@@ -156,6 +164,14 @@ export default function StudentProfile() {
           </li>
         ))}
       </ul>
+
+      {activeChatRoom && (
+        <ChatRoom
+          appointmentId={activeChatRoom.appointmentId}
+          doctorName={activeChatRoom.doctorName}
+          onClose={() => setActiveChatRoom(null)}
+        />
+      )}
     </div>
   )
 }

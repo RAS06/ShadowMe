@@ -113,6 +113,14 @@ try {
   // ignore if not present
 }
 
+// Mount chat routes
+try {
+  const chatRoutes = require('./routes/chat')
+  app.use('/api/chat', chatRoutes)
+} catch (e) {
+  console.warn('chat routes not present', e.message)
+}
+
 // Protected route to return current user info
 const authMiddleware = require('./middleware/auth')
 app.get('/api/me', authMiddleware, async (req, res) => {

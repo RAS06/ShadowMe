@@ -43,7 +43,18 @@ export default function Login() {
       const data = await res.json()
       localStorage.setItem('sm_token', data.token)
       localStorage.setItem('sm_user', JSON.stringify(data.user))
-      navigate('/dashboard')
+      console.log('Login successful, user role:', data.user.role)
+      // Redirect to role-specific dashboard
+      if (data.user.role === 'doctor') {
+        console.log('Redirecting to /doctor')
+        navigate('/doctor')
+      } else if (data.user.role === 'student') {
+        console.log('Redirecting to /student')
+        navigate('/student')
+      } else {
+        console.log('Redirecting to /dashboard (default)')
+        navigate('/dashboard')
+      }
     }).catch(err => {
       console.error('Login error', err)
       setError('Login failed')
