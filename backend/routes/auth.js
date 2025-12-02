@@ -95,13 +95,15 @@ router.post('/register', async (req, res) => {
     // create refresh token stored in DB (hashed)
     const { raw: refreshToken } = await createRefreshTokenForUser(user.id)
 
-    // Set refresh token as httpOnly, Secure cookie
-    res.cookie('refreshToken', refreshToken, {
+    // Set refresh token as httpOnly cookie. Use secure only in production so tests and
+    // local environments (supertest) can read the Set-Cookie header.
+    const cookieOptions = {
       httpOnly: true,
-      secure: true,
+      secure: (process.env.NODE_ENV || 'development') === 'production',
       sameSite: 'strict',
       maxAge: REFRESH_TOKEN_TTL_MS
-    })
+    }
+    res.cookie('refreshToken', refreshToken, cookieOptions)
 
     res.json({ token, user: { id: user.id, fullName: user.fullName, email: user.email, emailVerified: user.emailVerified, role: user.role, profileId: user.profileId } })
   } catch (err) {
@@ -114,7 +116,12 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: parsed.error.errors.map(e => e.message).join(', ') });
+    const errors = parsed.error && parsed.error.errors ? parsed.error.errors.map(e => ({ path: e.path, message: e.message })) : ['Validation failed'];
+    if ((process.env.NODE_ENV || 'development') !== 'production') {
+      console.warn('Login validation failed:', JSON.stringify(errors))
+      return res.status(400).json({ error: 'Validation failed', details: errors })
+    }
+    return res.status(400).json({ error: 'Validation failed' });
   }
   const { email, password } = parsed.data;
   try {
@@ -133,13 +140,15 @@ router.post('/login', async (req, res) => {
     // create refresh token stored in DB (hashed)
     const { raw: refreshToken } = await createRefreshTokenForUser(user.id)
 
-    // Set refresh token as httpOnly, Secure cookie
-    res.cookie('refreshToken', refreshToken, {
+    // Set refresh token as httpOnly cookie. Avoid Secure flag in non-production so
+    // tests (supertest) can observe the Set-Cookie header.
+    const cookieOptions = {
       httpOnly: true,
-      secure: true,
+      secure: (process.env.NODE_ENV || 'development') === 'production',
       sameSite: 'strict',
       maxAge: REFRESH_TOKEN_TTL_MS
-    })
+    }
+    res.cookie('refreshToken', refreshToken, cookieOptions)
 
     res.json({ token, user: { id: user.id, fullName: user.fullName, email: user.email, emailVerified: user.emailVerified, role: user.role, profileId: user.profileId } })
   } catch (err) {
@@ -179,13 +188,14 @@ router.post('/refresh',
 
       const { raw: newRefreshToken } = await createRefreshTokenForUser(user.id)
 
-      // Set new refresh token as httpOnly, Secure cookie
-      res.cookie('refreshToken', newRefreshToken, {
+      // Set new refresh token as httpOnly cookie. Use secure only in production.
+      const cookieOptions = {
         httpOnly: true,
-        secure: true,
+        secure: (process.env.NODE_ENV || 'development') === 'production',
         sameSite: 'strict',
         maxAge: REFRESH_TOKEN_TTL_MS
-      })
+      }
+      res.cookie('refreshToken', newRefreshToken, cookieOptions)
 
   const accessToken = jwt.sign({ sub: user.id, email: user.email, role: user.role, profileId: user.profileId }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES_IN })
       res.json({ token: accessToken })

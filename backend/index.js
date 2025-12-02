@@ -22,34 +22,16 @@ app.use(express.json())
 app.use(cookieParser())
 
 const port = process.env.PORT || 3000
-const MONGODB_URI = process.env.MONGODB_URI || ''
+// Do not cache MONGODB_URI at module load time; read it when connectDB() is called
+// so test runners and CI can inject the env var before calling connectDB().
 
 let _mongoMemoryServer = null
 
 async function connectDB() {
-  // If a real MONGODB_URI is provided, use it. Otherwise try to start an in-memory MongoDB
+  const MONGODB_URI = process.env.MONGODB_URI || ''
+  // Require a MONGODB_URI to be provided via env (no in-memory fallback)
   if (!MONGODB_URI) {
-    try {
-      // start mongodb-memory-server only when available (dev/test)
-      const { MongoMemoryServer } = require('mongodb-memory-server')
-      _mongoMemoryServer = await MongoMemoryServer.create()
-      const memUri = _mongoMemoryServer.getUri()
-      await mongoose.connect(memUri, { dbName: process.env.MONGO_INITDB_DATABASE || 'shadowme' })
-      console.log('Connected to in-memory MongoDB via mongodb-memory-server.')
-      // ensure we stop the memory server when mongoose disconnects
-      mongoose.connection.on('disconnected', async () => {
-        try {
-          if (_mongoMemoryServer) await _mongoMemoryServer.stop()
-        } catch (e) {
-          // ignore
-        }
-      })
-      return
-    } catch (err) {
-      console.warn('mongodb-memory-server not available or failed to start. Falling back to MONGODB_URI if provided.')
-      // fallthrough to attempt MONGODB_URI connect (may be empty)
-    }
-    console.warn('No MONGODB_URI provided; continuing without DB.')
+    console.error('connectDB: MONGODB_URI is not set. Aborting connect.')
     return
   }
 
@@ -64,9 +46,6 @@ async function connectDB() {
 async function stopDB() {
   try {
     await mongoose.disconnect()
-  } catch (e) {}
-  try {
-    if (_mongoMemoryServer) await _mongoMemoryServer.stop()
   } catch (e) {}
 }
 
@@ -111,6 +90,14 @@ try {
   app.use('/api/dev', devRoutes)
 } catch (e) {
   // ignore if not present
+}
+
+// Mount chat routes
+try {
+  const chatRoutes = require('./routes/chat')
+  app.use('/api/chat', chatRoutes)
+} catch (e) {
+  console.warn('chat routes not present', e && e.message)
 }
 
 // Protected route to return current user info

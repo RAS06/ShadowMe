@@ -2,7 +2,7 @@ const express = require('express')
 const router = express.Router()
 
 // returns a fresh seed token for development only
-router.get('/seed-token', (req, res) => {
+router.get('/seed-token', async (req, res) => {
   if ((process.env.NODE_ENV || 'development') === 'production') return res.status(404).json({ error: 'Not found' })
   try {
     const jwt = require('jsonwebtoken')
@@ -14,6 +14,38 @@ router.get('/seed-token', (req, res) => {
     }
     const secret = process.env.JWT_SECRET || 'replace_this_with_a_secure_random_string'
     const token = jwt.sign(payload, secret, { expiresIn: process.env.DEV_SEED_EXPIRES || '30d' })
+    // Ensure a matching User exists in DB for dev token to allow role checks
+    try {
+      const User = require('../models/User')
+      // upsert the user lightweight record
+      await User.updateOne({ id: payload.sub }, { $set: { id: payload.sub, email: payload.email, role: payload.role, profileId: payload.profileId, fullName: 'Dev User', passwordHash: 'dev-placeholder' } }, { upsert: true }).exec()
+      // Ensure a matching profile document exists depending on role
+      if (payload.role === 'student') {
+        try {
+          const Student = require('../models/Student')
+          const existing = await Student.findOne({ id: payload.profileId }).exec()
+          if (!existing) {
+            const s = new Student({ id: payload.profileId, address: 'Dev Address' })
+            await s.save()
+          }
+        } catch (e) {
+          console.warn('dev seed: failed to ensure Student profile', e && e.message)
+        }
+      } else if (payload.role === 'doctor') {
+        try {
+          const Doctor = require('../models/Doctor')
+          const existingD = await Doctor.findOne({ id: payload.profileId }).exec()
+          if (!existingD) {
+            const d = new Doctor({ id: payload.profileId, clinicName: 'Dev Clinic', address: 'Dev Address', doctorName: 'Dev Doctor' })
+            await d.save()
+          }
+        } catch (e) {
+          console.warn('dev seed: failed to ensure Doctor profile', e && e.message)
+        }
+      }
+    } catch (e) {
+      console.warn('dev seed: failed to upsert user', e && e.message)
+    }
     res.json({ token, user: { id: payload.sub, email: payload.email, role: payload.role, profileId: payload.profileId } })
   } catch (err) {
     console.warn('dev seed error', err && err.message)

@@ -1,30 +1,19 @@
-// Jest setup: start an in-memory MongoDB and set MONGODB_URI so tests always have a DB
+// Jest setup: require MONGODB_URI be set (use .env) and ensure mongoose disconnects after tests.
 process.env.NODE_ENV = process.env.NODE_ENV || 'test'
 process.env.MONGO_INITDB_DATABASE = process.env.MONGO_INITDB_DATABASE || 'shadowme_test'
-process.env.MONGOMS_FORCE_DOWNLOAD = process.env.MONGOMS_FORCE_DOWNLOAD || 'true'
-
-let _mongoServer
 const mongoose = require('mongoose')
+require('dotenv').config()
 
-beforeAll(async () => {
-	try {
-		const { MongoMemoryServer } = require('mongodb-memory-server')
-		_mongoServer = await MongoMemoryServer.create()
-		process.env.MONGODB_URI = _mongoServer.getUri()
-		// Ensure mongoose uses the test URI if any code connects during tests
-	} catch (err) {
-		// If mongodb-memory-server can't start, tests will attempt to use MONGODB_URI if provided
-		// Log a warning for visibility
-		// eslint-disable-next-line no-console
-		console.warn('jest.setup: failed to start mongodb-memory-server:', err && err.message)
-	}
-})
+// Indicate whether tests will have a MongoDB available. Some unit tests
+// (pure functions) do not require a DB; those should check `global.HAS_MONGODB`.
+global.HAS_MONGODB = Boolean(process.env.MONGODB_URI)
+if (!global.HAS_MONGODB) {
+  /* eslint-disable no-console */
+  console.warn('jest.setup: MONGODB_URI is not set. DB-dependent tests will be skipped.')
+}
 
 afterAll(async () => {
-	try {
-		await mongoose.disconnect()
-	} catch (e) {}
-	try {
-		if (_mongoServer) await _mongoServer.stop()
-	} catch (e) {}
+  try {
+    await mongoose.disconnect()
+  } catch (e) {}
 })
