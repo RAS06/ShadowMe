@@ -1,5 +1,41 @@
 # ShadowMe
 
+ShadowMe is a small demo application for student/doctor appointment booking with an optional real-time chat microservice.
+
+Purpose
+- Demonstrate appointment booking flows for students and doctors, plus a WebSocket-based chat service that persists messages to the backend.
+
+Run (Docker Compose)
+- From the repository root, start the full stack with Docker Compose:
+
+```bash
+docker compose up
+```
+
+- The Compose file includes these services:
+  - `backend` — API server (Express + Mongoose)
+  - `frontend` — React + Vite static SPA
+  - `chat` — WebSocket microservice for realtime messaging
+  - `nginx` — optional local TLS reverse-proxy (when present)
+
+Notes
+- If you change frontend or backend source code, rebuild the corresponding image with `docker compose build <service>` and restart that service.
+- Local TLS via the included `nginx` uses a self-signed certificate on first start; browsers will warn unless you trust the cert.
+
+Where the code lives
+- `backend/` — Express API, Mongoose models in `backend/models/`
+- `frontend/` — React source (built by Vite to static assets)
+- `chatserver/` (or `chat/`) — WebSocket chat microservice
+- `database/` — DB init scripts
+
+Contributors
+- Rizwan Syed
+- Braden May
+- Cale Tonazzi
+
+
+# ShadowMe
+
 Lightweight instructions to build and run the ShadowMe stack locally using Docker Compose.
 
 Project structure (top-level):
@@ -192,4 +228,33 @@ npm test -- --run --coverage
 
 ---
 
-If you'd like, I can also add a `CONTRIBUTING.md` that outlines the local dev workflow, branch naming, and PR expectations (tests passing + Codecov threshold).
+
+ 
+### Developer Notes
+
+- Important environment variables (set in `backend/.env`):
+	- `MONGODB_URI` — MongoDB connection string used by the backend. Provide this for DB-dependent tests and runtime.
+	- `JWT_SECRET` — secret used to sign access tokens in development/production.
+	- `ADMIN_API_KEY` — optional admin key to allow admin actions without a full admin JWT.
+
+- Rebuilding & quick commands:
+	- Rebuild and restart a single service after code changes:
+		```bash
+		docker compose build <service> && docker compose up -d <service>
+		```
+	- Rebuild everything (clean build):
+		```bash
+		docker compose build --no-cache && docker compose up -d
+		```
+
+- Testing:
+	- Backend tests: `cd backend && npm ci && npm test` (set `MONGODB_URI` in `backend/.env` to run DB tests). Unit tests that don't need a DB will run without this variable.
+	- Frontend tests: `cd frontend && npm ci && npm test`.
+
+- Trusting the self-signed cert (local nginx):
+	- The `nginx` service generates a self-signed cert at `nginx/certs/localhost.crt` on first start. Import this certificate into your OS/browser trust store to avoid HTTPS warnings when testing locally.
+	- On Linux (Ubuntu) you can copy the cert to `/usr/local/share/ca-certificates/` and run `sudo update-ca-certificates`.
+
+- Logs & debugging:
+	- Combined logs: `docker compose logs -f` or `docker compose logs -f backend frontend chat nginx`.
+	- Backend debug logs for key routes are enabled in development (`NODE_ENV !== 'production'`). Use the DevDebug overlay in the frontend to inspect tokens during local testing.
