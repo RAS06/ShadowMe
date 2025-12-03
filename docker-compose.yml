@@ -22,12 +22,52 @@ services:
       - "3001:3001"
     environment:
       NODE_ENV: production
-      VITE_API_URL: http://localhost:3000
+      VITE_API_URL: http://backend:3000
     # In Docker we serve the pre-built `dist` for reliability. Do not mount source or node_modules.
     # This avoids hiding container-installed dependencies (e.g. the PostCSS plugin).
     command: sh -c "node server.js"
+    restart: unless-stopped
     depends_on:
       - backend
+    networks:
+      - shadowme-network
+
+  chat:
+    build:
+      context: ./chatserver
+      dockerfile: Dockerfile
+    container_name: shadowme-chat
+    ports:
+      - "4000:4000"
+    env_file:
+      - backend/.env
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      BACKEND_URL: http://backend:3000
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - shadowme-network
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: shadowme-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/certs:/etc/nginx/certs:rw
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
+      - chat
     networks:
       - shadowme-network
 
